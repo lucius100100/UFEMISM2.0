@@ -3,9 +3,9 @@ clear all
 close all
 
 foldernames = {
-  '../../results_benchmark_MISMIP_mod_spinup/'
-  '../../results_benchmark_MISMIP_mod_advance/'
-  '../../results_benchmark_MISMIP_mod_retreat/'
+  '/Users/berends/Documents/Papers/UFEMISM2.0_part1/MISMIP/results_MISMIP_8km_spinup/'
+  '/Users/berends/Documents/Papers/UFEMISM2.0_part1/MISMIP/results_MISMIP_8km_advance/'
+  '/Users/berends/Documents/Papers/UFEMISM2.0_part1/MISMIP/results_MISMIP_8km_retreat/'
   };
 
 wa = 600;
@@ -21,27 +21,36 @@ ylabel( H.Ax{ 1,1},'GL position (km)')
 
 for fi = 1: length( foldernames)
   
-  filename = [foldernames{ fi} '/main_output_ANT_00001.nc'];
+  filename = [foldernames{ fi} '/main_output_ANT_grid.nc'];
   
-  mesh = read_mesh_from_file( filename);
+  time = ncread( filename,'time');
+  x_GL = zeros( size( time));
+  x    = ncread( filename,'x');
+  y    = ncread( filename,'y');
   
-  time = ncread( filename,'time') / 1e3;
-  r_GL_av = zeros( size( time));
+  imid = find( x==0);
+  jmid = find( y==0);
+  
+  x = x( imid:end);
   
   for ti = 1: length( time)
     
-    Hi = ncread( filename,'Hi',[1,ti],[Inf,1]);
-    Hb = ncread( filename,'Hb',[1,ti],[Inf,1]);
+    Hi = ncread( filename,'Hi',[imid,jmid,ti],[Inf,1,1]);
+    Hb = ncread( filename,'Hb',[imid,jmid,ti],[Inf,1,1]);
     
     seawater_density = 1028;
     ice_density      = 910;
     TAF = Hi - max( 0.0, (0 - Hb) * (seawater_density / ice_density));
     
-    C_GL = mesh_contour( mesh,TAF,0);
-    r_GL = sqrt( C_GL( :,1).^2 + C_GL( :,2).^2) / 1e3;
-    r_GL_av( ti) = mean( r_GL);
+    for i = 1: length( x)-1
+      if TAF( i) <= TAF( i+1)+1e-5
+        TAF( 1:i) = TAF( 1:i) + 1e-3;
+      end
+    end
+    
+    x_GL( ti) = interp1( TAF,x,0);
     
   end
   
-  line('parent',H.Ax{ 1,1},'xdata',time,'ydata',r_GL_av,'linewidth',3,'color','b');
+  line('parent',H.Ax{ 1,1},'xdata',time,'ydata',x_GL,'linewidth',3,'color','b');
 end

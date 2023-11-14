@@ -55,9 +55,6 @@ MODULE ice_model_types
     REAL(dp)                                :: PETSc_rtol
     REAL(dp)                                :: PETSc_abstol
 
-    ! Restart file
-    CHARACTER(LEN=256)                      :: restart_filename
-
   END TYPE type_ice_velocity_solver_SSA
 
   TYPE type_ice_velocity_solver_DIVA
@@ -103,9 +100,6 @@ MODULE ice_model_types
     REAL(dp)                                :: PETSc_rtol
     REAL(dp)                                :: PETSc_abstol
 
-    ! Restart file
-    CHARACTER(LEN=256)                      :: restart_filename
-
   END TYPE type_ice_velocity_solver_DIVA
 
   TYPE type_ice_velocity_solver_BPA
@@ -148,13 +142,10 @@ MODULE ice_model_types
     REAL(dp)                                :: PETSc_rtol
     REAL(dp)                                :: PETSc_abstol
 
-    ! Restart file
-    CHARACTER(LEN=256)                      :: restart_filename
-
   END TYPE type_ice_velocity_solver_BPA
 
-  TYPE type_ice_velocity_solver_hybrid
-    ! Data fields needed to solve the hybrid DIVA/BPA
+  TYPE type_ice_velocity_solver_coupled
+    ! Data fields needed to solve the coupled DIVA/BPA
 
     ! Solution
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: u_vav_b                     ! Vertically averaged horizontal ice velocity [m yr^-1]
@@ -180,10 +171,7 @@ MODULE ice_model_types
     REAL(dp)                                :: PETSc_rtol
     REAL(dp)                                :: PETSc_abstol
 
-    ! Restart file
-    CHARACTER(LEN=256)                      :: restart_filename
-
-  END TYPE type_ice_velocity_solver_hybrid
+  END TYPE type_ice_velocity_solver_coupled
 
   TYPE type_ice_pc
     ! Data fields needed for the predictor/corrector time-stepping scheme
@@ -325,7 +313,10 @@ MODULE ice_model_types
     TYPE(type_ice_velocity_solver_SSA)      :: SSA                         ! Shallow Shelf Approximation
     TYPE(type_ice_velocity_solver_DIVA)     :: DIVA                        ! Depth-Integrated Viscosity Approximation
     TYPE(type_ice_velocity_solver_BPA)      :: BPA                         ! Blatter-Pattyn Approximation
-    TYPE(type_ice_velocity_solver_hybrid)   :: hybrid                      ! Hybrid DIVA/BPA
+    TYPE(type_ice_velocity_solver_coupled)  :: coupled                     ! Coupled DIVA/BPA
+
+    ! Restart file
+    CHARACTER(LEN=256)                      :: velocity_restart_filename
 
     ! 3-D
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: u_3D                        ! [m yr^-1] 3-D ice velocity

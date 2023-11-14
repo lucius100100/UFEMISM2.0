@@ -832,11 +832,18 @@ CONTAINS
       CALL calc_idealised_geometry_MISMIP_mod( x, y, Hi, Hb, Hs, SL)
     ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_A') THEN
       CALL calc_idealised_geometry_ISMIP_HOM_A( x, y, Hi, Hb, Hs, SL)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_A_trans') THEN
+      CALL calc_idealised_geometry_ISMIP_HOM_A( y, x, Hi, Hb, Hs, SL)
     ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_B') THEN
       CALL calc_idealised_geometry_ISMIP_HOM_B( x, y, Hi, Hb, Hs, SL)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_B_trans') THEN
+      CALL calc_idealised_geometry_ISMIP_HOM_B( y, x, Hi, Hb, Hs, SL)
     ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_C' .OR. &
             choice_refgeo_idealised == 'ISMIP-HOM_D') THEN
       CALL calc_idealised_geometry_ISMIP_HOM_CD( x, y, Hi, Hb, Hs, SL)
+    ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_C_trans' .OR. &
+            choice_refgeo_idealised == 'ISMIP-HOM_D_trans') THEN
+      CALL calc_idealised_geometry_ISMIP_HOM_CD( y, x, Hi, Hb, Hs, SL)
     ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_E') THEN
       CALL crash('ISMIP-HOM E is not implemented in UFEMISM!')
     ELSEIF (choice_refgeo_idealised == 'ISMIP-HOM_F') THEN

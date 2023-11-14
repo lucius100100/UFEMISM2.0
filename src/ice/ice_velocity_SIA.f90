@@ -25,20 +25,25 @@ CONTAINS
 ! ===== Subroutines =====
 ! =======================
 
-  SUBROUTINE initialise_SIA_solver( mesh, SIA)
+  SUBROUTINE initialise_SIA_solver( mesh, ice, SIA)
     ! Initialise the SIA solver
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_ice_velocity_solver_SIA),  INTENT(OUT)   :: SIA
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SIA_solver'
+    REAL(dp)                                           :: dummy_dp
 
     ! Add routine to path
     CALL init_routine( routine_name)
+
+    ! To prevent compiler warnings
+    dummy_dp = ice%Hi( mesh%vi1)
 
     ! Allocate memory
     CALL allocate_SIA_solver( mesh, SIA)

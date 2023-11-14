@@ -102,7 +102,7 @@ CONTAINS
           END IF
         END DO
       CASE ('idealised')
-        CALL run_BMB_model_idealised( mesh, ice, BMB, time)
+        CALL run_BMB_model_idealised( mesh, ice, BMB, time, region_name, refgeo)
       CASE ('parameterised')
         CALL run_BMB_model_parameterised( mesh, ice, ocean, BMB)
       CASE ('inverted')

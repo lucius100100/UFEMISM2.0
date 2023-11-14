@@ -15,17 +15,22 @@ MODULE ice_velocity_main
   USE petsc_basic                                            , ONLY: solve_matrix_equation_CSR_PETSc
   USE mesh_types                                             , ONLY: type_mesh
   USE ice_model_types                                        , ONLY: type_ice_model, type_ice_velocity_solver_SIA, type_ice_velocity_solver_SSA, &
-                                                                     type_ice_velocity_solver_DIVA, type_ice_velocity_solver_BPA, type_ice_velocity_solver_hybrid
+                                                                     type_ice_velocity_solver_DIVA, type_ice_velocity_solver_BPA, type_ice_velocity_solver_coupled
   USE parameters
   USE reallocate_mod                                         , ONLY: reallocate_clean
   USE mesh_operators                                         , ONLY: map_b_a_2D, map_b_a_3D, ddx_a_a_2D, ddy_a_a_2D, ddx_a_b_2D, ddy_a_b_2D
   USE ice_velocity_SIA                                       , ONLY: initialise_SIA_solver , solve_SIA , remap_SIA_solver
-  USE ice_velocity_SSA                                       , ONLY: initialise_SSA_solver , solve_SSA , remap_SSA_solver , create_restart_file_SSA , write_to_restart_file_SSA
-  USE ice_velocity_DIVA                                      , ONLY: initialise_DIVA_solver, solve_DIVA, remap_DIVA_solver, create_restart_file_DIVA, write_to_restart_file_DIVA
-  USE ice_velocity_BPA                                       , ONLY: initialise_BPA_solver , solve_BPA , remap_BPA_solver , create_restart_file_BPA , write_to_restart_file_BPA
-  USE ice_velocity_hybrid_DIVA_BPA                           , ONLY: initialise_hybrid_DIVA_BPA_solver, solve_hybrid_DIVA_BPA, remap_hybrid_DIVA_BPA_solver
+  USE ice_velocity_SSA                                       , ONLY: initialise_SSA_solver , solve_SSA , remap_SSA_solver
+  USE ice_velocity_DIVA                                      , ONLY: initialise_DIVA_solver, solve_DIVA, remap_DIVA_solver
+  USE ice_velocity_BPA                                       , ONLY: initialise_BPA_solver , solve_BPA , remap_BPA_solver
+  USE ice_velocity_coupled_DIVA_BPA                          , ONLY: initialise_coupled_DIVA_BPA_solver, solve_coupled_DIVA_BPA, remap_coupled_DIVA_BPA_solver
   USE mpi_distributed_memory                                 , ONLY: gather_to_all_dp_1D, gather_to_all_dp_2D
   USE mesh_zeta                                              , ONLY: vertical_average
+  USE netcdf_basic                                           , ONLY: create_new_netcdf_file_for_writing, close_netcdf_file, open_existing_netcdf_file_for_writing
+  USE netcdf_output                                          , ONLY: generate_filename_XXXXXdotnc, setup_mesh_in_netcdf_file, add_time_dimension_to_file, &
+                                                                     add_field_mesh_dp_3D_b, write_time_to_file, write_to_field_multopt_mesh_dp_3D_b, &
+                                                                     add_zeta_dimension_to_file
+  USE netcdf_input                                           , ONLY: read_field_from_mesh_file_3D_b
 
   IMPLICIT NONE
 
@@ -45,34 +50,64 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_velocity_solver'
+    CHARACTER(LEN=256)                                 :: choice_initial_velocity
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    IF (par%master) then
-      WRITE(*,"(A)") '   Initialising ice velocity solver for the ' // &
-                      colour_string( TRIM( C%choice_stress_balance_approximation),'light blue') // &
-                     ' stress balance approximation...'
+  ! == Initialise ice velocity fields
+  ! =================================
+
+    ! Determine the choice of initial velocities for this model region
+    IF     (region_name == 'NAM') THEN
+      choice_initial_velocity  = C%choice_initial_velocity_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      choice_initial_velocity  = C%choice_initial_velocity_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      choice_initial_velocity  = C%choice_initial_velocity_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      choice_initial_velocity  = C%choice_initial_velocity_ANT
+    ELSE
+      CALL crash('unknown model region "' // region_name // '"!')
     END IF
 
-    SELECT CASE (C%choice_stress_balance_approximation)
+    ! Initialise velocities according to the specified method
+    IF     (choice_initial_velocity == 'zero') THEN
+      ice%u_3D_b = 0._dp
+      ice%v_3D_b = 0._dp
+    ELSEIF (choice_initial_velocity == 'read_from_file') THEN
+      CALL initialise_ice_velocities_from_file( mesh, ice, region_name)
+    ELSE
+      CALL crash('unknown choice_initial_velocity "' // TRIM( choice_initial_velocity) // '"!')
+    END IF
+
+  ! == Initialise ice velocity solver
+  ! =================================
+
+    IF (par%master) then
+      WRITE(*,"(A)") '   Initialising ice velocity solver for the ' // &
+                      colour_string( TRIM( C%choice_momentum_balance_approximation),'light blue') // &
+                     ' momentum balance approximation...'
+    END IF
+
+    SELECT CASE (C%choice_momentum_balance_approximation)
       CASE DEFAULT
-        CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
+        CALL crash('unknown choice_momentum_balance_approximation "' // TRIM( C%choice_momentum_balance_approximation) // '"!')
       CASE ('none')
         ! No need to do anything
       CASE ('SIA')
-        CALL initialise_SIA_solver            ( mesh, ice%SIA                )
+        CALL initialise_SIA_solver             ( mesh, ice, ice%SIA)
       CASE ('SSA')
-        CALL initialise_SSA_solver            ( mesh, ice%SSA   , region_name)
+        CALL initialise_SSA_solver             ( mesh, ice, ice%SSA)
       CASE ('SIA/SSA')
-        CALL initialise_SIA_solver            ( mesh, ice%SIA                )
-        CALL initialise_SSA_solver            ( mesh, ice%SSA   , region_name)
+        CALL initialise_SIA_solver             ( mesh, ice, ice%SIA)
+        CALL initialise_SSA_solver             ( mesh, ice, ice%SSA)
       CASE ('DIVA')
-        CALL initialise_DIVA_solver           ( mesh, ice%DIVA  , region_name)
+        CALL initialise_DIVA_solver            ( mesh, ice, ice%DIVA)
       CASE ('BPA')
-        CALL initialise_BPA_solver            ( mesh, ice%BPA   , region_name)
-      CASE ('hybrid DIVA/BPA')
-        CALL initialise_hybrid_DIVA_BPA_solver( mesh, ice%hybrid, region_name)
+        CALL initialise_BPA_solver             ( mesh, ice, ice%BPA)
+      CASE ('coupled DIVA/BPA')
+        CALL initialise_coupled_DIVA_BPA_solver( mesh, ice, ice%coupled)
     END SELECT
 
     ! Finalise routine path
@@ -105,10 +140,10 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    SELECT CASE (C%choice_stress_balance_approximation)
+    SELECT CASE (C%choice_momentum_balance_approximation)
 
       CASE DEFAULT
-        CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
+        CALL crash('unknown choice_momentum_balance_approximation "' // TRIM( C%choice_momentum_balance_approximation) // '"!')
 
       CASE ('none')
         ! No need to do anything
@@ -144,11 +179,11 @@ CONTAINS
         CALL solve_BPA( mesh, ice, ice%BPA, BC_prescr_mask_bk, BC_prescr_u_bk, BC_prescr_v_bk)
         CALL set_ice_velocities_to_BPA_results( mesh, ice, ice%BPA)
 
-      CASE ('hybrid DIVA/BPA')
-        ! Calculate velocities according to the hybrid DIVA/BPA
+      CASE ('coupled DIVA/BPA')
+        ! Calculate velocities according to the coupled DIVA/BPA
 
-        CALL solve_hybrid_DIVA_BPA( mesh, ice, ice%hybrid, region_name, BC_prescr_mask_b, BC_prescr_u_b, BC_prescr_v_b)
-        CALL set_ice_velocities_to_hybrid_DIVA_BPA_results( mesh, ice, ice%hybrid)
+        CALL solve_coupled_DIVA_BPA( mesh, ice, ice%coupled, region_name, BC_prescr_mask_b, BC_prescr_u_b, BC_prescr_v_b)
+        CALL set_ice_velocities_to_coupled_DIVA_BPA_results( mesh, ice, ice%coupled)
 
     END SELECT
 
@@ -252,10 +287,10 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    SELECT CASE (C%choice_stress_balance_approximation)
+    SELECT CASE (C%choice_momentum_balance_approximation)
 
       CASE DEFAULT
-        CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
+        CALL crash('unknown choice_momentum_balance_approximation "' // TRIM( C%choice_momentum_balance_approximation) // '"!')
 
       CASE ('none')
       ! No need to do anything
@@ -286,10 +321,10 @@ CONTAINS
         CALL remap_BPA_solver(  mesh_old, mesh_new, ice%BPA)
         CALL set_ice_velocities_to_BPA_results( mesh_new, ice, ice%BPA)
 
-      CASE ('hybrid DIVA/BPA')
+      CASE ('coupled DIVA/BPA')
 
-        CALL remap_hybrid_DIVA_BPA_solver(  mesh_old, mesh_new, ice%hybrid)
-        CALL set_ice_velocities_to_hybrid_DIVA_BPA_results( mesh_new, ice, ice%hybrid)
+        CALL remap_coupled_DIVA_BPA_solver(  mesh_old, mesh_new, ice%coupled)
+        CALL set_ice_velocities_to_coupled_DIVA_BPA_results( mesh_new, ice, ice%coupled)
 
     END SELECT
 
@@ -555,40 +590,40 @@ CONTAINS
 
   END SUBROUTINE set_ice_velocities_to_BPA_results
 
-  SUBROUTINE set_ice_velocities_to_hybrid_DIVA_BPA_results( mesh, ice, hybrid)
-    ! Set applied ice model velocities and strain rates to hybrid DIVA/BPA results
+  SUBROUTINE set_ice_velocities_to_coupled_DIVA_BPA_results( mesh, ice, coupled)
+    ! Set applied ice model velocities and strain rates to coupled DIVA/BPA results
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ice_model),                   INTENT(INOUT) :: ice
-    TYPE(type_ice_velocity_solver_hybrid),  INTENT(IN)    :: hybrid
+    TYPE(type_ice_velocity_solver_coupled), INTENT(IN)    :: coupled
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'set_ice_velocities_to_hybrid_DIVA_BPA_results'
-    INTEGER                                            :: ti,vi
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'set_ice_velocities_to_coupled_DIVA_BPA_results'
+    INTEGER                                               :: ti,vi
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Velocities
     DO ti = mesh%ti1, mesh%ti2
-      ice%u_3D_b( ti,:) = hybrid%u_bk( ti,:)
-      ice%v_3D_b( ti,:) = hybrid%v_bk( ti,:)
+      ice%u_3D_b( ti,:) = coupled%u_bk( ti,:)
+      ice%v_3D_b( ti,:) = coupled%v_bk( ti,:)
     END DO
 
     ! Strain rates
     DO vi = mesh%vi1, mesh%vi2
-      ice%du_dx_3D( vi,:) = hybrid%BPA%du_dx_ak( vi,:)
-      ice%du_dy_3D( vi,:) = hybrid%BPA%du_dy_ak( vi,:)
-      ice%du_dz_3D( vi,:) = hybrid%BPA%du_dz_ak( vi,:)
-      ice%dv_dx_3D( vi,:) = hybrid%BPA%dv_dx_ak( vi,:)
-      ice%dv_dy_3D( vi,:) = hybrid%BPA%dv_dy_ak( vi,:)
-      ice%dv_dz_3D( vi,:) = hybrid%BPA%dv_dz_ak( vi,:)
+      ice%du_dx_3D( vi,:) = coupled%BPA%du_dx_ak( vi,:)
+      ice%du_dy_3D( vi,:) = coupled%BPA%du_dy_ak( vi,:)
+      ice%du_dz_3D( vi,:) = coupled%BPA%du_dz_ak( vi,:)
+      ice%dv_dx_3D( vi,:) = coupled%BPA%dv_dx_ak( vi,:)
+      ice%dv_dy_3D( vi,:) = coupled%BPA%dv_dy_ak( vi,:)
+      ice%dv_dz_3D( vi,:) = coupled%BPA%dv_dz_ak( vi,:)
     END DO
 
-    ! In the hybrid DIVA/BPA, gradients of w are neglected
+    ! In the coupled DIVA/BPA, gradients of w are neglected
     ice%dw_dx_3D = 0._dp
     ice%dw_dy_3D = 0._dp
     ice%dw_dz_3D = 0._dp
@@ -597,7 +632,7 @@ CONTAINS
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE set_ice_velocities_to_hybrid_DIVA_BPA_results
+  END SUBROUTINE set_ice_velocities_to_coupled_DIVA_BPA_results
 
 ! == Calculate velocities on the c-grid for solving the ice thickness equation
 
@@ -926,6 +961,64 @@ CONTAINS
 
 ! == Restart NetCDF files
 
+  SUBROUTINE initialise_ice_velocities_from_file( mesh, ice, region_name)
+    ! Initialise the ice velocity solver from an external NetCDF file
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_ice_velocities_from_file'
+    REAL(dp)                                           :: dummy1
+    CHARACTER(LEN=256)                                 :: filename
+    REAL(dp)                                           :: timeframe
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! To prevent compiler warnings
+    dummy1 = mesh%xmin
+
+    ! Determine the filename and timeframe to read for this model region
+    IF     (region_name == 'NAM') THEN
+      filename  = C%filename_initial_velocity_NAM
+      timeframe = C%timeframe_initial_velocity_NAM
+    ELSEIF (region_name == 'EAS') THEN
+      filename  = C%filename_initial_velocity_EAS
+      timeframe = C%timeframe_initial_velocity_EAS
+    ELSEIF (region_name == 'GRL') THEN
+      filename  = C%filename_initial_velocity_GRL
+      timeframe = C%timeframe_initial_velocity_GRL
+    ELSEIF (region_name == 'ANT') THEN
+      filename  = C%filename_initial_velocity_ANT
+      timeframe = C%timeframe_initial_velocity_ANT
+    ELSE
+      CALL crash('unknown model region "' // region_name // '"!')
+    END IF
+
+    ! Write to terminal
+    IF (par%master) WRITE(0,*) '   Initialising ice velocities from file "' // colour_string( TRIM( filename),'light blue') // '"...'
+
+    ! Read velocities from the file
+    IF (timeframe == 1E9_dp) THEN
+      ! Assume the file has no time dimension
+      CALL read_field_from_mesh_file_3D_b( filename, 'u_3D_b', ice%u_3D_b)
+      CALL read_field_from_mesh_file_3D_b( filename, 'v_3D_b', ice%v_3D_b)
+    ELSE
+      ! Read specified timeframe
+      CALL read_field_from_mesh_file_3D_b( filename, 'u_3D_b', ice%u_3D_b, time_to_read = timeframe)
+      CALL read_field_from_mesh_file_3D_b( filename, 'v_3D_b', ice%v_3D_b, time_to_read = timeframe)
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_ice_velocities_from_file
+
   SUBROUTINE write_to_restart_file_ice_velocity( mesh, ice, time)
     ! Write to the restart NetCDF file for the ice velocity solver
 
@@ -938,28 +1031,33 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'write_to_restart_file_ice_velocity'
+    INTEGER                                                      :: ncid
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    SELECT CASE (C%choice_stress_balance_approximation)
-      CASE DEFAULT
-        CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
-      CASE ('none')
-        ! No need to do anything
-      CASE ('SIA')
-        ! The SIA doesn't have a restart file
-      CASE ('SSA')
-        CALL write_to_restart_file_SSA( mesh, ice%SSA, time)
-      CASE ('SIA/SSA')
-        CALL write_to_restart_file_SSA( mesh, ice%SSA, time)
-      CASE ('DIVA')
-        CALL write_to_restart_file_DIVA( mesh, ice%DIVA, time)
-      CASE ('BPA')
-        CALL write_to_restart_file_BPA( mesh, ice%BPA, time)
-      CASE ('hybrid DIVA/BPA')
-        CALL warning('the hybrid DIVA/BPA does not have a restart file yet!')
-    END SELECT
+    ! If no NetCDF output should be created, do nothing
+    IF (.NOT. C%do_create_netcdf_output) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Print to terminal
+    IF (par%master) WRITE(0,'(A)') '   Writing to ice velocity restart file "' // &
+      colour_string( TRIM( ice%velocity_restart_filename), 'light blue') // '"...'
+
+    ! Open the NetCDF file
+    CALL open_existing_netcdf_file_for_writing( ice%velocity_restart_filename, ncid)
+
+    ! Write the time to the file
+    CALL write_time_to_file( ice%velocity_restart_filename, ncid, time)
+
+    ! Write the velocity fields to the file
+    CALL write_to_field_multopt_mesh_dp_3D_b( mesh, ice%velocity_restart_filename, ncid, 'u_3D_b', ice%u_3D_b)
+    CALL write_to_field_multopt_mesh_dp_3D_b( mesh, ice%velocity_restart_filename, ncid, 'v_3D_b', ice%v_3D_b)
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -977,28 +1075,44 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'create_restart_file_ice_velocity'
+    CHARACTER(LEN=256)                                           :: filename_base
+    INTEGER                                                      :: ncid
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    SELECT CASE (C%choice_stress_balance_approximation)
-      CASE DEFAULT
-        CALL crash('unknown choice_stress_balance_approximation "' // TRIM( C%choice_stress_balance_approximation) // '"!')
-      CASE ('none')
-        ! No need to do anything
-      CASE ('SIA')
-        ! The SIA doesn't have a restart file
-      CASE ('SSA')
-      CALL create_restart_file_SSA( mesh, ice%SSA)
-      CASE ('SIA/SSA')
-      CALL create_restart_file_SSA( mesh, ice%SSA)
-      CASE ('DIVA')
-      CALL create_restart_file_DIVA( mesh, ice%DIVA)
-      CASE ('BPA')
-      CALL create_restart_file_BPA( mesh, ice%BPA)
-      CASE ('hybrid DIVA/BPA')
-        CALL warning('the hybrid DIVA/BPA does not have a restart file yet!')
-    END SELECT
+    ! If no NetCDF output should be created, do nothing
+    IF (.NOT. C%do_create_netcdf_output) THEN
+      CALL finalise_routine( routine_name)
+      RETURN
+    END IF
+
+    ! Set the filename
+    filename_base = TRIM( C%output_dir) // 'restart_ice_velocity'
+    CALL generate_filename_XXXXXdotnc( filename_base, ice%velocity_restart_filename)
+
+    ! Print to terminal
+    IF (par%master) WRITE(0,'(A)') '   Creating ice velocity restart file "' // &
+      colour_string( TRIM( ice%velocity_restart_filename), 'light blue') // '"...'
+
+    ! Create the NetCDF file
+    CALL create_new_netcdf_file_for_writing( ice%velocity_restart_filename, ncid)
+
+    ! Set up the mesh in the file
+    CALL setup_mesh_in_netcdf_file( ice%velocity_restart_filename, ncid, mesh)
+
+    ! Add a zeta dimension for the 3-D ice velocities
+    CALL add_zeta_dimension_to_file( ice%velocity_restart_filename, ncid, mesh%zeta)
+
+    ! Add a time dimension to the file
+    CALL add_time_dimension_to_file( ice%velocity_restart_filename, ncid)
+
+    ! Add the velocity fields to the file
+    CALL add_field_mesh_dp_3D_b( ice%velocity_restart_filename, ncid, 'u_3D_b', long_name = '3-D horizontal ice velocity in the x-direction', units = 'm/yr')
+    CALL add_field_mesh_dp_3D_b( ice%velocity_restart_filename, ncid, 'v_3D_b', long_name = '3-D horizontal ice velocity in the y-direction', units = 'm/yr')
+
+    ! Close the file
+    CALL close_netcdf_file( ncid)
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

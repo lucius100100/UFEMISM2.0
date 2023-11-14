@@ -270,20 +270,20 @@ MODULE model_configuration
   ! ==========================
 
     ! General
-    CHARACTER(LEN=256)  :: choice_stress_balance_approximation_config   = 'DIVA'                           ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
+    CHARACTER(LEN=256)  :: choice_momentum_balance_approximation_config = 'DIVA'                           ! Choice of momentum balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
     CHARACTER(LEN=256)  :: choice_hybrid_SIASSA_scheme_config           = 'add'                            ! Choice of scheme for combining SIA and SSA velocities in the hybrid approach
-    LOGICAL             :: do_include_SSADIVA_crossterms_config         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
+    LOGICAL             :: do_include_eff_visc_gradients_config         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
 
     ! Hybrid DIVA/BPA
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_NAM_config       = ''                               ! How to determine where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for North America
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_EAS_config       = ''                               ! How to determine where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for Eurasia
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_GRL_config       = ''                               ! How to determine where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for Greenland
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_ANT_config       = ''                               ! How to determine where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for Antarctica
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_NAM_config      = ''                               ! How to determine where to solve the DIVA and where the BPA in the coupled DIVA/BPA for North America
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_EAS_config      = ''                               ! How to determine where to solve the DIVA and where the BPA in the coupled DIVA/BPA for Eurasia
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_GRL_config      = ''                               ! How to determine where to solve the DIVA and where the BPA in the coupled DIVA/BPA for Greenland
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_ANT_config      = ''                               ! How to determine where to solve the DIVA and where the BPA in the coupled DIVA/BPA for Antarctica
 
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_NAM_config     = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for North America
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_EAS_config     = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for Eurasia
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_GRL_config     = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for Greenland
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_ANT_config     = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the hybrid DIVA/BPA for Antarctica
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_NAM_config    = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the coupled DIVA/BPA for North America
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_EAS_config    = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the coupled DIVA/BPA for Eurasia
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_GRL_config    = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the coupled DIVA/BPA for Greenland
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_ANT_config    = ''                               ! Path to a file containing a mask that describes where to solve the DIVA and where the BPA in the coupled DIVA/BPA for Antarctica
 
     ! Initialisation
     CHARACTER(LEN=256)  :: choice_initial_velocity_NAM_config           = 'zero'                           ! Can be 'zero', 'read_from_file'
@@ -308,8 +308,8 @@ MODULE model_configuration
     REAL(dp)            :: visc_it_relax_config                         = 0.2_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
     REAL(dp)            :: visc_eff_min_config                          = 1E4_dp                           ! Minimum value for effective viscosity
     REAL(dp)            :: vel_max_config                               = 5000._dp                         ! Velocities are limited to this value
-    REAL(dp)            :: stress_balance_PETSc_rtol_config             = 1E-7_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    REAL(dp)            :: stress_balance_PETSc_abstol_config           = 1E-5_dp                          ! PETSc solver - stop criterion, absolute difference
+    REAL(dp)            :: momentum_balance_PETSc_rtol_config           = 1E-7_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    REAL(dp)            :: momentum_balance_PETSc_abstol_config         = 1E-5_dp                          ! PETSc solver - stop criterion, absolute difference
 
     ! Boundary conditions
     CHARACTER(LEN=256)  :: BC_u_west_config                             = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain border
@@ -344,6 +344,7 @@ MODULE model_configuration
     REAL(dp)            :: subgrid_friction_exponent_on_B_grid_config   = 2._dp                            ! Exponent to which f_grnd should be raised before being used to scale the final value of beta on the B grid
 
     ! Stability
+    REAL(dp)            :: slid_beta_min_config                         = 1E0_dp                           ! Minimum value for basal friction coefficient
     REAL(dp)            :: slid_beta_max_config                         = 1E20_dp                          ! Maximum value for basal friction coefficient
     REAL(dp)            :: slid_delta_v_config                          = 1.0E-3_dp                        ! Normalisation parameter to prevent errors when velocity is zero
 
@@ -513,6 +514,11 @@ MODULE model_configuration
     REAL(dp)            :: porenudge_H_dHdt_flowline_r_smooth_config    = 5000._dp                         ! [m]       Radius for Gaussian filter used to smooth dC/dt as regularisation
     REAL(dp)            :: porenudge_H_dHdt_flowline_w_smooth_config    = 0.0_dp                           ! [-]       Relative contribution of smoothed dC/dt in regularisation
     REAL(dp)            :: porenudge_H_dHdt_flowline_dist_max_config    = 1000.0_dp                        ! [km]      Max total distance the trace is allowed to move before ending it
+
+    ! Initial conditions for basal hydrology model
+    LOGICAL             :: do_init_pore_water_fraction_from_file_config = .FALSE.                          ! Whether or not to initialise the pore water fraction from an external file
+    CHARACTER(LEN=256)  :: filename_pore_water_fraction_config          = ''                               ! External file containing prescribed pore water fraction
+    REAL(dp)            :: timeframe_pore_water_fraction_config         = 1E9_dp                           ! Timeframe to read from filename_pore_water_fraction_config
 
   ! == Bed roughness
   ! ==================
@@ -980,6 +986,7 @@ MODULE model_configuration
     REAL(dp)            :: r_smooth_geometry
     LOGICAL             :: remove_Lake_Vostok
 
+
     ! == Initial geometry
     ! ===================
 
@@ -1136,20 +1143,20 @@ MODULE model_configuration
   ! ==========================
 
     ! General
-    CHARACTER(LEN=256)  :: choice_stress_balance_approximation
+    CHARACTER(LEN=256)  :: choice_momentum_balance_approximation
     CHARACTER(LEN=256)  :: choice_hybrid_SIASSA_scheme
-    LOGICAL             :: do_include_SSADIVA_crossterms
+    LOGICAL             :: do_include_eff_visc_gradients
 
     ! Hybrid DIVA/BPA
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_NAM
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_EAS
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_GRL
-    CHARACTER(LEN=256)  :: choice_hybrid_DIVA_BPA_mask_ANT
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_NAM
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_EAS
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_GRL
+    CHARACTER(LEN=256)  :: choice_coupled_DIVA_BPA_mask_ANT
 
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_NAM
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_EAS
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_GRL
-    CHARACTER(LEN=256)  :: filename_hybrid_DIVA_BPA_mask_ANT
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_NAM
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_EAS
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_GRL
+    CHARACTER(LEN=256)  :: filename_coupled_DIVA_BPA_mask_ANT
 
     ! Initialisation
     CHARACTER(LEN=256)  :: choice_initial_velocity_NAM
@@ -1174,8 +1181,8 @@ MODULE model_configuration
     REAL(dp)            :: visc_it_relax
     REAL(dp)            :: visc_eff_min
     REAL(dp)            :: vel_max
-    REAL(dp)            :: stress_balance_PETSc_rtol
-    REAL(dp)            :: stress_balance_PETSc_abstol
+    REAL(dp)            :: momentum_balance_PETSc_rtol
+    REAL(dp)            :: momentum_balance_PETSc_abstol
 
     ! Boundary conditions
     CHARACTER(LEN=256)  :: BC_u_west
@@ -1210,6 +1217,7 @@ MODULE model_configuration
     REAL(dp)            :: subgrid_friction_exponent_on_B_grid
 
     ! Stability
+    REAL(dp)            :: slid_beta_min
     REAL(dp)            :: slid_beta_max
     REAL(dp)            :: slid_delta_v
 
@@ -1248,7 +1256,7 @@ MODULE model_configuration
     REAL(dp)            :: timeframe_dHi_dt_target_GRL
     REAL(dp)            :: timeframe_dHi_dt_target_ANT
 
-    ! Target uabs_surf
+    ! Target surface ice speed
     LOGICAL             :: do_target_uabs_surf
 
     ! Files containing a target uabs_surf for inversions
@@ -1325,6 +1333,7 @@ MODULE model_configuration
     LOGICAL             :: do_protect_grounded_mask
     REAL(dp)            :: protect_grounded_mask_t_end
 
+
     ! Fix/delay ice thickness evolution
     LOGICAL             :: do_fixiness_before_start
     REAL(dp)            :: fixiness_t_start
@@ -1355,8 +1364,8 @@ MODULE model_configuration
     REAL(dp)            :: Martin2011_hydro_Hb_min
     REAL(dp)            :: Martin2011_hydro_Hb_max
 
-  ! == Pore water inversion by nudging
-  ! =====================================
+  ! == Basal hydrology inversion by nudging
+  ! =======================================
 
     ! General
     LOGICAL             :: do_pore_water_nudging
@@ -1368,7 +1377,7 @@ MODULE model_configuration
     REAL(dp)            :: pore_water_fraction_max
     CHARACTER(LEN=256)  :: filename_inverted_pore_water
 
-    ! Basal inversion model based on flowline-averaged values of H and dH/dt
+    ! Basal hydrology inversion model based on local and flowline-averaged values of H and dH/dt
     REAL(dp)            :: porenudge_H_dHdt_flowline_t_scale
     REAL(dp)            :: porenudge_H_dHdt_flowline_dH0
     REAL(dp)            :: porenudge_H_dHdt_flowline_dHdt0
@@ -1378,6 +1387,11 @@ MODULE model_configuration
     REAL(dp)            :: porenudge_H_dHdt_flowline_r_smooth
     REAL(dp)            :: porenudge_H_dHdt_flowline_w_smooth
     REAL(dp)            :: porenudge_H_dHdt_flowline_dist_max
+
+    ! Initial conditions for basal hydrology model
+    LOGICAL             :: do_init_pore_water_fraction_from_file
+    CHARACTER(LEN=256)  :: filename_pore_water_fraction
+    REAL(dp)            :: timeframe_pore_water_fraction
 
   ! == Bed roughness
   ! ==================
@@ -1545,10 +1559,6 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_GRL
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT
 
-    ! Generated by the model
-    INTEGER                             :: nz_ocean ! Number of ocean layers
-    REAL(dp), DIMENSION(:), ALLOCATABLE :: z_ocean  ! Depths of ocean layers
-
   ! == Surface mass balance
   ! =======================
 
@@ -1561,6 +1571,7 @@ MODULE model_configuration
     LOGICAL             :: do_SMB_residual_absorb
     REAL(dp)            :: SMB_residual_absorb_t_start
     REAL(dp)            :: SMB_residual_absorb_t_end
+
 
     ! Choice of SMB model
     CHARACTER(LEN=256)  :: choice_SMB_model_NAM
@@ -1630,7 +1641,7 @@ MODULE model_configuration
     REAL(dp)            :: LMB_inversion_t_start
     REAL(dp)            :: LMB_inversion_t_end
 
-    ! Choice of BMB model
+    ! Choice of LMB model
     CHARACTER(LEN=256)  :: choice_LMB_model_NAM
     CHARACTER(LEN=256)  :: choice_LMB_model_EAS
     CHARACTER(LEN=256)  :: choice_LMB_model_GRL
@@ -1753,11 +1764,10 @@ MODULE model_configuration
   ! == Non-configurable variables
   ! =============================
 
+    ! Output directory (generated at run time)
     CHARACTER(LEN=256)  :: output_dir
 
-  ! Total mask values (used only for diagnostic output)
-  ! ===================================================
-
+    ! Total mask values (used only for diagnostic output)
     INTEGER             :: type_icefree_land
     INTEGER             :: type_icefree_ocean
     INTEGER             :: type_grounded_ice
@@ -1768,6 +1778,10 @@ MODULE model_configuration
     INTEGER             :: type_calvingfront_fl
     INTEGER             :: type_margin
     INTEGER             :: type_coastline
+
+    ! Ocean vertical coordinate system
+    INTEGER                             :: nz_ocean ! Number of ocean layers
+    REAL(dp), DIMENSION(:), ALLOCATABLE :: z_ocean  ! Depths of ocean layers
 
   END TYPE type_config
 
@@ -2077,17 +2091,17 @@ CONTAINS
       choice_zeta_grid_config                                     , &
       nz_config                                                   , &
       zeta_irregular_log_R_config                                 , &
-      choice_stress_balance_approximation_config                  , &
+      choice_momentum_balance_approximation_config                , &
       choice_hybrid_SIASSA_scheme_config                          , &
-      do_include_SSADIVA_crossterms_config                        , &
-      choice_hybrid_DIVA_BPA_mask_NAM_config                      , &
-      choice_hybrid_DIVA_BPA_mask_EAS_config                      , &
-      choice_hybrid_DIVA_BPA_mask_GRL_config                      , &
-      choice_hybrid_DIVA_BPA_mask_ANT_config                      , &
-      filename_hybrid_DIVA_BPA_mask_NAM_config                    , &
-      filename_hybrid_DIVA_BPA_mask_EAS_config                    , &
-      filename_hybrid_DIVA_BPA_mask_GRL_config                    , &
-      filename_hybrid_DIVA_BPA_mask_ANT_config                    , &
+      do_include_eff_visc_gradients_config                        , &
+      choice_coupled_DIVA_BPA_mask_NAM_config                     , &
+      choice_coupled_DIVA_BPA_mask_EAS_config                     , &
+      choice_coupled_DIVA_BPA_mask_GRL_config                     , &
+      choice_coupled_DIVA_BPA_mask_ANT_config                     , &
+      filename_coupled_DIVA_BPA_mask_NAM_config                   , &
+      filename_coupled_DIVA_BPA_mask_EAS_config                   , &
+      filename_coupled_DIVA_BPA_mask_GRL_config                   , &
+      filename_coupled_DIVA_BPA_mask_ANT_config                   , &
       choice_initial_velocity_NAM_config                          , &
       choice_initial_velocity_EAS_config                          , &
       choice_initial_velocity_GRL_config                          , &
@@ -2106,8 +2120,8 @@ CONTAINS
       visc_it_relax_config                                        , &
       visc_eff_min_config                                         , &
       vel_max_config                                              , &
-      stress_balance_PETSc_rtol_config                            , &
-      stress_balance_PETSc_abstol_config                          , &
+      momentum_balance_PETSc_rtol_config                          , &
+      momentum_balance_PETSc_abstol_config                        , &
       BC_u_west_config                                            , &
       BC_u_east_config                                            , &
       BC_u_south_config                                           , &
@@ -2129,6 +2143,7 @@ CONTAINS
       subgrid_bedrock_cdf_nbins_config                            , &
       do_subgrid_friction_on_A_grid_config                        , &
       subgrid_friction_exponent_on_B_grid_config                  , &
+      slid_beta_min_config                                        , &
       slid_beta_max_config                                        , &
       slid_delta_v_config                                         , &
       choice_ice_integration_method_config                        , &
@@ -2236,6 +2251,9 @@ CONTAINS
       porenudge_H_dHdt_flowline_r_smooth_config                   , &
       porenudge_H_dHdt_flowline_w_smooth_config                   , &
       porenudge_H_dHdt_flowline_dist_max_config                   , &
+      do_init_pore_water_fraction_from_file_config                , &
+      filename_pore_water_fraction_config                         , &
+      timeframe_pore_water_fraction_config                        , &
       choice_bed_roughness_config                                 , &
       choice_bed_roughness_parameterised_config                   , &
       filename_bed_roughness_NAM_config                           , &
@@ -2602,6 +2620,7 @@ CONTAINS
     C%r_smooth_geometry                                      = r_smooth_geometry_config
     C%remove_Lake_Vostok                                     = remove_Lake_Vostok_config
 
+
     ! == Initial geometry
     ! ===================
 
@@ -2758,20 +2777,20 @@ CONTAINS
   ! ==========================
 
     ! General
-    C%choice_stress_balance_approximation                    = choice_stress_balance_approximation_config
+    C%choice_momentum_balance_approximation                  = choice_momentum_balance_approximation_config
     C%choice_hybrid_SIASSA_scheme                            = choice_hybrid_SIASSA_scheme_config
-    C%do_include_SSADIVA_crossterms                          = do_include_SSADIVA_crossterms_config
+    C%do_include_eff_visc_gradients                          = do_include_eff_visc_gradients_config
 
     ! Hybrid DIVA/BPA
-    C%choice_hybrid_DIVA_BPA_mask_NAM                        = choice_hybrid_DIVA_BPA_mask_NAM_config
-    C%choice_hybrid_DIVA_BPA_mask_EAS                        = choice_hybrid_DIVA_BPA_mask_EAS_config
-    C%choice_hybrid_DIVA_BPA_mask_GRL                        = choice_hybrid_DIVA_BPA_mask_GRL_config
-    C%choice_hybrid_DIVA_BPA_mask_ANT                        = choice_hybrid_DIVA_BPA_mask_ANT_config
+    C%choice_coupled_DIVA_BPA_mask_NAM                       = choice_coupled_DIVA_BPA_mask_NAM_config
+    C%choice_coupled_DIVA_BPA_mask_EAS                       = choice_coupled_DIVA_BPA_mask_EAS_config
+    C%choice_coupled_DIVA_BPA_mask_GRL                       = choice_coupled_DIVA_BPA_mask_GRL_config
+    C%choice_coupled_DIVA_BPA_mask_ANT                       = choice_coupled_DIVA_BPA_mask_ANT_config
 
-    C%filename_hybrid_DIVA_BPA_mask_NAM                      = filename_hybrid_DIVA_BPA_mask_NAM_config
-    C%filename_hybrid_DIVA_BPA_mask_EAS                      = filename_hybrid_DIVA_BPA_mask_EAS_config
-    C%filename_hybrid_DIVA_BPA_mask_GRL                      = filename_hybrid_DIVA_BPA_mask_GRL_config
-    C%filename_hybrid_DIVA_BPA_mask_ANT                      = filename_hybrid_DIVA_BPA_mask_ANT_config
+    C%filename_coupled_DIVA_BPA_mask_NAM                     = filename_coupled_DIVA_BPA_mask_NAM_config
+    C%filename_coupled_DIVA_BPA_mask_EAS                     = filename_coupled_DIVA_BPA_mask_EAS_config
+    C%filename_coupled_DIVA_BPA_mask_GRL                     = filename_coupled_DIVA_BPA_mask_GRL_config
+    C%filename_coupled_DIVA_BPA_mask_ANT                     = filename_coupled_DIVA_BPA_mask_ANT_config
 
     ! Initialisation
     C%choice_initial_velocity_NAM                            = choice_initial_velocity_NAM_config
@@ -2796,8 +2815,8 @@ CONTAINS
     C%visc_it_relax                                          = visc_it_relax_config
     C%visc_eff_min                                           = visc_eff_min_config
     C%vel_max                                                = vel_max_config
-    C%stress_balance_PETSc_rtol                              = stress_balance_PETSc_rtol_config
-    C%stress_balance_PETSc_abstol                            = stress_balance_PETSc_abstol_config
+    C%momentum_balance_PETSc_rtol                            = momentum_balance_PETSc_rtol_config
+    C%momentum_balance_PETSc_abstol                          = momentum_balance_PETSc_abstol_config
 
     ! Boundary conditions
     C%BC_u_west                                              = BC_u_west_config
@@ -2832,6 +2851,7 @@ CONTAINS
     C%subgrid_friction_exponent_on_B_grid                    = subgrid_friction_exponent_on_B_grid_config
 
     ! Stability
+    C%slid_beta_min                                          = slid_beta_min_config
     C%slid_beta_max                                          = slid_beta_max_config
     C%slid_delta_v                                           = slid_delta_v_config
 
@@ -2870,16 +2890,16 @@ CONTAINS
     C%timeframe_dHi_dt_target_GRL                            = timeframe_dHi_dt_target_GRL_config
     C%timeframe_dHi_dt_target_ANT                            = timeframe_dHi_dt_target_ANT_config
 
-    ! Target uabs_surf
+    ! Target surface ice speed
     C%do_target_uabs_surf                                    = do_target_uabs_surf_config
 
-    ! Files containing a target dHi_dt for inversions
+    ! Files containing a target uabs_surf for inversions
     C%filename_uabs_surf_target_NAM                          = filename_uabs_surf_target_NAM_config
     C%filename_uabs_surf_target_EAS                          = filename_uabs_surf_target_EAS_config
     C%filename_uabs_surf_target_GRL                          = filename_uabs_surf_target_GRL_config
     C%filename_uabs_surf_target_ANT                          = filename_uabs_surf_target_ANT_config
 
-    ! Timeframes for reading target dHi_dt from file (set to 1E9_dp if the file has no time dimension)
+    ! Timeframes for reading target uabs_surf from file (set to 1E9_dp if the file has no time dimension)
     C%timeframe_uabs_surf_target_NAM                         = timeframe_uabs_surf_target_NAM_config
     C%timeframe_uabs_surf_target_EAS                         = timeframe_uabs_surf_target_EAS_config
     C%timeframe_uabs_surf_target_GRL                         = timeframe_uabs_surf_target_GRL_config
@@ -2947,6 +2967,7 @@ CONTAINS
     C%do_protect_grounded_mask                               = do_protect_grounded_mask_config
     C%protect_grounded_mask_t_end                            = protect_grounded_mask_t_end_config
 
+
     ! Fix/delay ice thickness evolution
     C%do_fixiness_before_start                               = do_fixiness_before_start_config
     C%fixiness_t_start                                       = fixiness_t_start_config
@@ -2977,8 +2998,8 @@ CONTAINS
     C%Martin2011_hydro_Hb_min                                = Martin2011_hydro_Hb_min_config
     C%Martin2011_hydro_Hb_max                                = Martin2011_hydro_Hb_max_config
 
-  ! == Pore water inversion by nudging
-  ! ==================================
+  ! == Basal hydrology inversion by nudging
+  ! =======================================
 
     ! General
     C%do_pore_water_nudging                                  = do_pore_water_nudging_config
@@ -2990,16 +3011,21 @@ CONTAINS
     C%pore_water_fraction_max                                = pore_water_fraction_max_config
     C%filename_inverted_pore_water                           = filename_inverted_pore_water_config
 
-    ! Basal inversion model based on flowline-averaged values of H and dH/dt
-    C%porenudge_H_dHdt_flowline_t_scale                       = porenudge_H_dHdt_flowline_t_scale_config
-    C%porenudge_H_dHdt_flowline_dH0                           = porenudge_H_dHdt_flowline_dH0_config
-    C%porenudge_H_dHdt_flowline_dHdt0                         = porenudge_H_dHdt_flowline_dHdt0_config
-    C%porenudge_H_dHdt_flowline_dU0                           = porenudge_H_dHdt_flowline_dU0_config
-    C%porenudge_H_dHdt_flowline_Hi_scale                      = porenudge_H_dHdt_flowline_Hi_scale_config
-    C%porenudge_H_dHdt_flowline_u_scale                       = porenudge_H_dHdt_flowline_u_scale_config
-    C%porenudge_H_dHdt_flowline_r_smooth                      = porenudge_H_dHdt_flowline_r_smooth_config
-    C%porenudge_H_dHdt_flowline_w_smooth                      = porenudge_H_dHdt_flowline_w_smooth_config
-    C%porenudge_H_dHdt_flowline_dist_max                      = porenudge_H_dHdt_flowline_dist_max_config
+    ! Basal hydrology inversion model based on local and flowline-averaged values of H and dH/dt
+    C%porenudge_H_dHdt_flowline_t_scale                      = porenudge_H_dHdt_flowline_t_scale_config
+    C%porenudge_H_dHdt_flowline_dH0                          = porenudge_H_dHdt_flowline_dH0_config
+    C%porenudge_H_dHdt_flowline_dHdt0                        = porenudge_H_dHdt_flowline_dHdt0_config
+    C%porenudge_H_dHdt_flowline_dU0                          = porenudge_H_dHdt_flowline_dU0_config
+    C%porenudge_H_dHdt_flowline_Hi_scale                     = porenudge_H_dHdt_flowline_Hi_scale_config
+    C%porenudge_H_dHdt_flowline_u_scale                      = porenudge_H_dHdt_flowline_u_scale_config
+    C%porenudge_H_dHdt_flowline_r_smooth                     = porenudge_H_dHdt_flowline_r_smooth_config
+    C%porenudge_H_dHdt_flowline_w_smooth                     = porenudge_H_dHdt_flowline_w_smooth_config
+    C%porenudge_H_dHdt_flowline_dist_max                     = porenudge_H_dHdt_flowline_dist_max_config
+
+    ! Initial conditions for basal hydrology model
+    C%do_init_pore_water_fraction_from_file                  = do_init_pore_water_fraction_from_file_config
+    C%filename_pore_water_fraction                           = filename_pore_water_fraction_config
+    C%timeframe_pore_water_fraction                          = timeframe_pore_water_fraction_config
 
   ! == Bed roughness
   ! ==================
@@ -3161,7 +3187,7 @@ CONTAINS
     ! Choice of realistic ocean model
     C%choice_ocean_model_realistic                           = choice_ocean_model_realistic_config
 
-    ! Paths to files containing fields for realistic oceans
+    ! Paths to files containing fields for realistic ocean
     C%filename_ocean_snapshot_NAM                            = filename_ocean_snapshot_NAM_config
     C%filename_ocean_snapshot_EAS                            = filename_ocean_snapshot_EAS_config
     C%filename_ocean_snapshot_GRL                            = filename_ocean_snapshot_GRL_config
@@ -3179,6 +3205,7 @@ CONTAINS
     C%do_SMB_residual_absorb                                 = do_SMB_residual_absorb_config
     C%SMB_residual_absorb_t_start                            = SMB_residual_absorb_t_start_config
     C%SMB_residual_absorb_t_end                              = SMB_residual_absorb_t_end_config
+
 
     ! Choice of SMB model
     C%choice_SMB_model_NAM                                   = choice_SMB_model_NAM_config
@@ -3248,7 +3275,7 @@ CONTAINS
     C%LMB_inversion_t_start                                  = LMB_inversion_t_start_config
     C%LMB_inversion_t_end                                    = LMB_inversion_t_end_config
 
-    ! Choice of BMB model
+    ! Choice of LMB model
     C%choice_LMB_model_NAM                                   = choice_LMB_model_NAM_config
     C%choice_LMB_model_EAS                                   = choice_LMB_model_EAS_config
     C%choice_LMB_model_GRL                                   = choice_LMB_model_GRL_config

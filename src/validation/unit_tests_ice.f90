@@ -130,13 +130,13 @@ CONTAINS
     CALL initialise_reference_geometries_on_model_mesh( region_name, mesh, refgeo_init, refgeo_PD, refgeo_GIAeq)
 
     ! Initialise the ice model
-    C%choice_stress_balance_approximation = 'SIA'
+    C%choice_momentum_balance_approximation = 'SIA'
     CALL initialise_ice_dynamics_model( mesh, ice, refgeo_init, refgeo_PD, refgeo_GIAeq, GIA, region_name)
 
     ! Also initialise DIVA and BPA solvers
-    C%choice_stress_balance_approximation = 'DIVA'
+    C%choice_momentum_balance_approximation = 'DIVA'
     CALL initialise_velocity_solver( mesh, ice, region_name)
-    C%choice_stress_balance_approximation = 'BPA'
+    C%choice_momentum_balance_approximation = 'BPA'
     CALL initialise_velocity_solver( mesh, ice, region_name)
 
     ! Calculate necessary 3-D matrix operators
@@ -165,7 +165,7 @@ CONTAINS
 
     ! SIA
     IF (par%master) WRITE(0,*) '   Calculating ice velocities for the Halfar dome with the ' // colour_string( 'SIA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'SIA'
+    C%choice_momentum_balance_approximation = 'SIA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_SIA = ice%u_3D_b
     v_3D_b_SIA = ice%v_3D_b
@@ -173,7 +173,7 @@ CONTAINS
 
     ! DIVA
     IF (par%master) WRITE(0,*) '   Calculating ice velocities for the Halfar dome with the ' // colour_string( 'DIVA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'DIVA'
+    C%choice_momentum_balance_approximation = 'DIVA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_DIVA = ice%u_3D_b
     v_3D_b_DIVA = ice%v_3D_b
@@ -181,7 +181,7 @@ CONTAINS
 
     ! BPA
     IF (par%master) WRITE(0,*) '   Calculating ice velocities for the Halfar dome with the ' // colour_string( 'BPA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'BPA'
+    C%choice_momentum_balance_approximation = 'BPA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_BPA = ice%u_3D_b
     v_3D_b_BPA = ice%v_3D_b
@@ -413,9 +413,9 @@ CONTAINS
   ! ==========================
 
     ! General
-    C%choice_stress_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
+    C%choice_momentum_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
     C%choice_hybrid_SIASSA_scheme           = 'add'                            ! Choice of scheme for combining SIA and SSA velocities in the hybrid approach
-    C%do_include_SSADIVA_crossterms         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
+    C%do_include_eff_visc_gradients         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
 
     ! Initialisation
     C%choice_initial_velocity_ANT           = 'zero'
@@ -427,8 +427,8 @@ CONTAINS
     C%visc_it_relax                         = 0.4_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
     C%visc_eff_min                          = 1E4_dp                           ! Minimum value for effective viscosity
     C%vel_max                               = 5000._dp                         ! Velocities are limited to this value
-    C%stress_balance_PETSc_rtol             = 1E-6_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    C%stress_balance_PETSc_abstol           = 1E-4_dp                          ! PETSc solver - stop criterion, absolute difference
+    C%momentum_balance_PETSc_rtol             = 1E-6_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    C%momentum_balance_PETSc_abstol           = 1E-4_dp                          ! PETSc solver - stop criterion, absolute difference
 
     ! Boundary conditions
     C%BC_u_west                             = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain border
@@ -738,13 +738,13 @@ CONTAINS
     CALL initialise_reference_geometries_on_model_mesh( region_name, mesh, refgeo_init, refgeo_PD, refgeo_GIAeq)
 
     ! Initialise the ice model
-    C%choice_stress_balance_approximation = 'SIA/SSA'
+    C%choice_momentum_balance_approximation = 'SIA/SSA'
     CALL initialise_ice_dynamics_model( mesh, ice, refgeo_init, refgeo_PD, refgeo_GIAeq, GIA, region_name)
 
     ! Also initialise DIVA and BPA solvers
-    C%choice_stress_balance_approximation = 'DIVA'
+    C%choice_momentum_balance_approximation = 'DIVA'
     CALL initialise_velocity_solver( mesh, ice, region_name)
-    C%choice_stress_balance_approximation = 'BPA'
+    C%choice_momentum_balance_approximation = 'BPA'
     CALL initialise_velocity_solver( mesh, ice, region_name)
 
     ! Calculate necessary 3-D matrix operators
@@ -773,7 +773,7 @@ CONTAINS
 
     ! SIA/SSA
     IF (par%master) WRITE(0,*) '  Calculating ice velocities for ISMIP-HOM A with the ' // colour_string( 'SIA/SSA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'SIA/SSA'
+    C%choice_momentum_balance_approximation = 'SIA/SSA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_SIASSA = ice%u_3D_b
     v_3D_b_SIASSA = ice%v_3D_b
@@ -781,7 +781,7 @@ CONTAINS
 
     ! DIVA
     IF (par%master) WRITE(0,*) '  Calculating ice velocities for ISMIP-HOM A with the ' // colour_string( 'DIVA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'DIVA'
+    C%choice_momentum_balance_approximation = 'DIVA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_DIVA = ice%u_3D_b
     v_3D_b_DIVA = ice%v_3D_b
@@ -789,7 +789,7 @@ CONTAINS
 
     ! BPA
     IF (par%master) WRITE(0,*) '  Calculating ice velocities for ISMIP-HOM A with the ' // colour_string( 'BPA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'BPA'
+    C%choice_momentum_balance_approximation = 'BPA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_BPA = ice%u_3D_b
     v_3D_b_BPA = ice%v_3D_b
@@ -1026,13 +1026,13 @@ CONTAINS
     CALL initialise_reference_geometries_on_model_mesh( region_name, mesh, refgeo_init, refgeo_PD, refgeo_GIAeq)
 
     ! Initialise the ice model
-    C%choice_stress_balance_approximation = 'SIA/SSA'
+    C%choice_momentum_balance_approximation = 'SIA/SSA'
     CALL initialise_ice_dynamics_model( mesh, ice, refgeo_init, refgeo_PD, refgeo_GIAeq, GIA, region_name)
 
     ! Also initialise DIVA and BPA solvers
-    C%choice_stress_balance_approximation = 'DIVA'
+    C%choice_momentum_balance_approximation = 'DIVA'
     CALL initialise_velocity_solver( mesh, ice, region_name)
-    C%choice_stress_balance_approximation = 'BPA'
+    C%choice_momentum_balance_approximation = 'BPA'
     CALL initialise_velocity_solver( mesh, ice, region_name)
 
     ! Calculate necessary 3-D matrix operators
@@ -1061,7 +1061,7 @@ CONTAINS
 
     ! SIA/SSA
     IF (par%master) WRITE(0,*) '  Calculating ice velocities for ISMIP-HOM C with the ' // colour_string( 'SIA/SSA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'SIA/SSA'
+    C%choice_momentum_balance_approximation = 'SIA/SSA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_SIASSA = ice%u_3D_b
     v_3D_b_SIASSA = ice%v_3D_b
@@ -1069,7 +1069,7 @@ CONTAINS
 
     ! DIVA
     IF (par%master) WRITE(0,*) '  Calculating ice velocities for ISMIP-HOM C with the ' // colour_string( 'DIVA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'DIVA'
+    C%choice_momentum_balance_approximation = 'DIVA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_DIVA = ice%u_3D_b
     v_3D_b_DIVA = ice%v_3D_b
@@ -1077,7 +1077,7 @@ CONTAINS
 
     ! BPA
     IF (par%master) WRITE(0,*) '  Calculating ice velocities for ISMIP-HOM C with the ' // colour_string( 'BPA','light blue') // '...'
-    C%choice_stress_balance_approximation = 'BPA'
+    C%choice_momentum_balance_approximation = 'BPA'
     CALL solve_stress_balance( mesh, ice, BMB, region_name)
     u_3D_b_BPA = ice%u_3D_b
     v_3D_b_BPA = ice%v_3D_b
@@ -1343,9 +1343,9 @@ CONTAINS
   ! ==========================
 
     ! General
-    C%choice_stress_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
+    C%choice_momentum_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
     C%choice_hybrid_SIASSA_scheme           = 'add'                            ! Choice of scheme for combining SIA and SSA velocities in the hybrid approach
-    C%do_include_SSADIVA_crossterms         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
+    C%do_include_eff_visc_gradients         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
 
     ! Initialisation
     C%choice_initial_velocity_ANT           = 'zero'
@@ -1357,8 +1357,8 @@ CONTAINS
     C%visc_it_relax                         = 0.4_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
     C%visc_eff_min                          = 1E4_dp                           ! Minimum value for effective viscosity
     C%vel_max                               = 5000._dp                         ! Velocities are limited to this value
-    C%stress_balance_PETSc_rtol             = 1E-6_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    C%stress_balance_PETSc_abstol           = 1E-4_dp                          ! PETSc solver - stop criterion, absolute difference
+    C%momentum_balance_PETSc_rtol             = 1E-6_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    C%momentum_balance_PETSc_abstol           = 1E-4_dp                          ! PETSc solver - stop criterion, absolute difference
 
     ! Boundary conditions
     C%BC_u_west                             = 'periodic_ISMIP-HOM'             ! Boundary conditions for the ice velocity field at the domain border
@@ -1807,9 +1807,9 @@ CONTAINS
   ! ==========================
 
     ! General
-    C%choice_stress_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
+    C%choice_momentum_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
     C%choice_hybrid_SIASSA_scheme           = 'add'                            ! Choice of scheme for combining SIA and SSA velocities in the hybrid approach
-    C%do_include_SSADIVA_crossterms         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
+    C%do_include_eff_visc_gradients         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
 
     ! Initialisation
     C%choice_initial_velocity_ANT           = 'zero'
@@ -1821,8 +1821,8 @@ CONTAINS
     C%visc_it_relax                         = 0.4_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
     C%visc_eff_min                          = 1E4_dp                           ! Minimum value for effective viscosity
     C%vel_max                               = 5000._dp                         ! Velocities are limited to this value
-    C%stress_balance_PETSc_rtol             = 1E-5_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    C%stress_balance_PETSc_abstol           = 1E-3_dp                          ! PETSc solver - stop criterion, absolute difference
+    C%momentum_balance_PETSc_rtol             = 1E-5_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    C%momentum_balance_PETSc_abstol           = 1E-3_dp                          ! PETSc solver - stop criterion, absolute difference
 
     ! Boundary conditions
     C%BC_u_west                             = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain border
@@ -2528,9 +2528,9 @@ CONTAINS
   ! ==========================
 
     ! General
-    C%choice_stress_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
+    C%choice_momentum_balance_approximation   = 'SIA'                            ! Choice of stress balance approximation: "none" (= no flow, though geometry can still change due to mass balance), "SIA", "SSA", "SIA/SSA", "DIVA", "BPA"
     C%choice_hybrid_SIASSA_scheme           = 'add'                            ! Choice of scheme for combining SIA and SSA velocities in the hybrid approach
-    C%do_include_SSADIVA_crossterms         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
+    C%do_include_eff_visc_gradients         = .TRUE.                           ! Whether or not to include the gradients of the effective viscosity (the "cross-terms") in the solution of the SSA/DIVA
 
     ! Initialisation
     C%choice_initial_velocity_ANT           = 'zero'
@@ -2542,8 +2542,8 @@ CONTAINS
     C%visc_it_relax                         = 0.4_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
     C%visc_eff_min                          = 1E4_dp                           ! Minimum value for effective viscosity
     C%vel_max                               = 5000._dp                         ! Velocities are limited to this value
-    C%stress_balance_PETSc_rtol             = 1E-5_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    C%stress_balance_PETSc_abstol           = 1E-3_dp                          ! PETSc solver - stop criterion, absolute difference
+    C%momentum_balance_PETSc_rtol             = 1E-5_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    C%momentum_balance_PETSc_abstol           = 1E-3_dp                          ! PETSc solver - stop criterion, absolute difference
 
     ! Boundary conditions
     C%BC_u_west                             = 'infinite'                       ! Boundary conditions for the ice velocity field at the domain border

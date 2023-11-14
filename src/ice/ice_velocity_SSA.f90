@@ -23,10 +23,6 @@ MODULE ice_velocity_SSA
   USE mesh_utilities                                         , ONLY: find_ti_copy_ISMIP_HOM_periodic
   USE CSR_sparse_matrix_utilities                            , ONLY: type_sparse_matrix_CSR_dp, allocate_matrix_CSR_dist, add_entry_CSR_dist, read_single_row_CSR_dist, &
                                                                      deallocate_matrix_CSR_dist
-  USE netcdf_basic                                           , ONLY: create_new_netcdf_file_for_writing, close_netcdf_file, open_existing_netcdf_file_for_writing
-  USE netcdf_output                                          , ONLY: generate_filename_XXXXXdotnc, setup_mesh_in_netcdf_file, add_time_dimension_to_file, &
-                                                                     add_field_mesh_dp_2D_b, write_time_to_file, write_to_field_multopt_mesh_dp_2D_b
-  USE netcdf_input                                           , ONLY: read_field_from_mesh_file_2D_b
   USE mpi_distributed_memory                                 , ONLY: gather_to_all_dp_1D
   USE ice_flow_laws                                          , ONLY: calc_effective_viscosity_Glen_2D, calc_ice_rheology_Glen
   USE reallocate_mod                                         , ONLY: reallocate_bounds, reallocate_clean
@@ -41,19 +37,18 @@ CONTAINS
 
 ! == Main routines
 
-  SUBROUTINE initialise_SSA_solver( mesh, SSA, region_name)
+  SUBROUTINE initialise_SSA_solver( mesh, ice, SSA)
     ! Initialise the SSA solver
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_ice_velocity_solver_SSA),  INTENT(OUT)   :: SSA
-    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SSA_solver'
-    CHARACTER(LEN=256)                                 :: choice_initial_velocity
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -61,32 +56,13 @@ CONTAINS
     ! Allocate memory
     CALL allocate_SSA_solver( mesh, SSA)
 
-    ! Determine the choice of initial velocities for this model region
-    IF     (region_name == 'NAM') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_NAM
-    ELSEIF (region_name == 'EAS') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_EAS
-    ELSEIF (region_name == 'GRL') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_GRL
-    ELSEIF (region_name == 'ANT') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_ANT
-    ELSE
-      CALL crash('unknown model region "' // region_name // '"!')
-    END IF
-
-    ! Initialise velocities according to the specified method
-    IF     (choice_initial_velocity == 'zero') THEN
-      SSA%u_b = 0._dp
-      SSA%v_b = 0._dp
-    ELSEIF (choice_initial_velocity == 'read_from_file') THEN
-      CALL initialise_SSA_velocities_from_file( mesh, SSA, region_name)
-    ELSE
-      CALL crash('unknown choice_initial_velocity "' // TRIM( choice_initial_velocity) // '"!')
-    END IF
+    ! Initialise ice velocities
+    SSA%u_b = ice%u_3D_b( :,mesh%nz)
+    SSA%v_b = ice%v_3D_b( :,mesh%nz)
 
     ! Set tolerances for PETSc matrix solver for the linearised SSA
-    SSA%PETSc_rtol   = C%stress_balance_PETSc_rtol
-    SSA%PETSc_abstol = C%stress_balance_PETSc_abstol
+    SSA%PETSc_rtol   = C%momentum_balance_PETSc_rtol
+    SSA%PETSc_abstol = C%momentum_balance_PETSc_abstol
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -411,7 +387,7 @@ CONTAINS
       ELSE
         ! No boundary conditions apply; solve the SSA
 
-        IF (C%do_include_SSADIVA_crossterms) THEN
+        IF (C%do_include_eff_visc_gradients) THEN
           ! Calculate matrix coefficients for the full SSA
           CALL calc_SSA_stiffness_matrix_row_free( mesh, SSA, A_CSR, bb, row_tiuv)
         ELSE
@@ -1641,64 +1617,6 @@ CONTAINS
 
 ! == Initialisation
 
-  SUBROUTINE initialise_SSA_velocities_from_file( mesh, SSA, region_name)
-    ! Initialise the velocities for the SSA solver from an external NetCDF file
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_velocity_solver_SSA),  INTENT(INOUT) :: SSA
-    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_SSA_velocities_from_file'
-    REAL(dp)                                           :: dummy1
-    CHARACTER(LEN=256)                                 :: filename
-    REAL(dp)                                           :: timeframe
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! To prevent compiler warnings
-    dummy1 = mesh%xmin
-
-    ! Determine the filename and timeframe to read for this model region
-    IF     (region_name == 'NAM') THEN
-      filename  = C%filename_initial_velocity_NAM
-      timeframe = C%timeframe_initial_velocity_NAM
-    ELSEIF (region_name == 'EAS') THEN
-      filename  = C%filename_initial_velocity_EAS
-      timeframe = C%timeframe_initial_velocity_EAS
-    ELSEIF (region_name == 'GRL') THEN
-      filename  = C%filename_initial_velocity_GRL
-      timeframe = C%timeframe_initial_velocity_GRL
-    ELSEIF (region_name == 'ANT') THEN
-      filename  = C%filename_initial_velocity_ANT
-      timeframe = C%timeframe_initial_velocity_ANT
-    ELSE
-      CALL crash('unknown model region "' // region_name // '"!')
-    END IF
-
-    ! Write to terminal
-    IF (par%master) WRITE(0,*) '   Initialising SSA velocities from file "' // colour_string( TRIM( filename),'light blue') // '"...'
-
-    ! Read velocities from the file
-    IF (timeframe == 1E9_dp) THEN
-      ! Assume the file has no time dimension
-      CALL read_field_from_mesh_file_2D_b( filename, 'u_b', SSA%u_b)
-      CALL read_field_from_mesh_file_2D_b( filename, 'v_b', SSA%v_b)
-    ELSE
-      ! Read specified timeframe
-      CALL read_field_from_mesh_file_2D_b( filename, 'u_b', SSA%u_b, time_to_read = timeframe)
-      CALL read_field_from_mesh_file_2D_b( filename, 'v_b', SSA%v_b, time_to_read = timeframe)
-    END IF
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE initialise_SSA_velocities_from_file
-
   SUBROUTINE allocate_SSA_solver( mesh, SSA)
     ! Allocate memory the SSA solver
 
@@ -1756,105 +1674,5 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE allocate_SSA_solver
-
-! == Restart NetCDF files
-
-  SUBROUTINE write_to_restart_file_SSA( mesh, SSA, time)
-    ! Write to the restart NetCDF file for the SSA solver
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)              :: mesh
-    TYPE(type_ice_velocity_solver_SSA),  INTENT(IN)              :: SSA
-    REAL(dp),                            INTENT(IN)              :: time
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'write_to_restart_file_SSA'
-    INTEGER                                                      :: ncid
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! If no NetCDF output should be created, do nothing
-    IF (.NOT. C%do_create_netcdf_output) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Print to terminal
-    IF (par%master) WRITE(0,'(A)') '   Writing to SSA restart file "' // &
-      colour_string( TRIM( SSA%restart_filename), 'light blue') // '"...'
-
-    ! Open the NetCDF file
-    CALL open_existing_netcdf_file_for_writing( SSA%restart_filename, ncid)
-
-    ! Write the time to the file
-    CALL write_time_to_file( SSA%restart_filename, ncid, time)
-
-    ! Write the velocity fields to the file
-    CALL write_to_field_multopt_mesh_dp_2D_b( mesh, SSA%restart_filename, ncid, 'u_b', SSA%u_b)
-    CALL write_to_field_multopt_mesh_dp_2D_b( mesh, SSA%restart_filename, ncid, 'v_b', SSA%v_b)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE write_to_restart_file_SSA
-
-  SUBROUTINE create_restart_file_SSA( mesh, SSA)
-    ! Create a restart NetCDF file for the SSA solver
-    ! Includes generation of the procedural filename (e.g. "restart_SSA_00001.nc")
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)              :: mesh
-    TYPE(type_ice_velocity_solver_SSA),  INTENT(INOUT)           :: SSA
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'create_restart_file_SSA'
-    CHARACTER(LEN=256)                                           :: filename_base
-    INTEGER                                                      :: ncid
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! If no NetCDF output should be created, do nothing
-    IF (.NOT. C%do_create_netcdf_output) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Set the filename
-    filename_base = TRIM( C%output_dir) // 'restart_ice_velocity_SSA'
-    CALL generate_filename_XXXXXdotnc( filename_base, SSA%restart_filename)
-
-    ! Print to terminal
-    IF (par%master) WRITE(0,'(A)') '   Creating SSA restart file "' // &
-      colour_string( TRIM( SSA%restart_filename), 'light blue') // '"...'
-
-    ! Create the NetCDF file
-    CALL create_new_netcdf_file_for_writing( SSA%restart_filename, ncid)
-
-    ! Set up the mesh in the file
-    CALL setup_mesh_in_netcdf_file( SSA%restart_filename, ncid, mesh)
-
-    ! Add a time dimension to the file
-    CALL add_time_dimension_to_file( SSA%restart_filename, ncid)
-
-    ! Add the velocity fields to the file
-    CALL add_field_mesh_dp_2D_b( SSA%restart_filename, ncid, 'u_b', long_name = '2-D horizontal ice velocity in the x-direction', units = 'm/yr')
-    CALL add_field_mesh_dp_2D_b( SSA%restart_filename, ncid, 'v_b', long_name = '2-D horizontal ice velocity in the y-direction', units = 'm/yr')
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE create_restart_file_SSA
 
 END MODULE ice_velocity_SSA

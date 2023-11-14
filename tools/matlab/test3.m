@@ -2,21 +2,15 @@ clc
 clear all
 close all
 
-
-H.Fig = figure('position',[100,100,820,800],'color','w'); % Position in pixels: [x_links,y_onder,breedte,hoogte]
-H.Ax( 1,1) = axes('parent',H.Fig,'units','pixels','position',[ 80,450,320,325]);
-H.Ax( 1,2) = axes('parent',H.Fig,'units','pixels','position',[480,450,320,325]);
-H.Ax( 2,1) = axes('parent',H.Fig,'units','pixels','position',[ 80, 50,320,325]);
-H.Ax( 2,2) = axes('parent',H.Fig,'units','pixels','position',[480, 50,320,325]);
-
-for i = 1: 2
-  for j = 1: 2
-    set( H.Ax( i,j),'fontsize',24,'xgrid','on','ygrid','on')
-    if (i == 2)
-      xlabel( H.Ax( i,j),'x-coordinate (m)')
-    end
-    if (j == 1)
-      ylabel( H.Ax( i,j),'y-coordinate (m)')
-    end
-  end
-end
+resid = [];
+resid( end+1) =    2.0000000000000000     ;
+resid( end+1) =    1.3653364942087418     ;
+resid( end+1) =    1.0429772142009530     ;
+resid( end+1) =   0.63088571750774791     ;
+resid( end+1) =   0.30513346596550961     ;
+resid( end+1) =   0.16092949054147279     ;
+resid( end+1) =    9.3997348940390663E-002;
+resid( end+1) =    5.8760845058691648E-002;
+resid( end+1) =    2.9202198706365541E-002;
+resid( end+1) =    1.7220609277156698E-002;
+plot( log( resid) / log( 10))

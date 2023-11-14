@@ -1076,8 +1076,8 @@ CONTAINS
     REAL(dp)                                              :: visc_it_relax_save
     REAL(dp)                                              :: visc_eff_min_save
     REAL(dp)                                              :: vel_max_save
-    REAL(dp)                                              :: stress_balance_PETSc_rtol_save
-    REAL(dp)                                              :: stress_balance_PETSc_abstol_save
+    REAL(dp)                                              :: momentum_balance_PETSc_rtol_save
+    REAL(dp)                                              :: momentum_balance_PETSc_abstol_save
     REAL(dp)                                              :: Glens_flow_law_epsilon_sq_0_save
     REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: Hi_tplusdt
     REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: divQ
@@ -1205,8 +1205,8 @@ CONTAINS
     visc_it_relax_save                         = C%visc_it_relax
     visc_eff_min_save                          = C%visc_eff_min
     vel_max_save                               = C%vel_max
-    stress_balance_PETSc_rtol_save             = C%stress_balance_PETSc_rtol
-    stress_balance_PETSc_abstol_save           = C%stress_balance_PETSc_abstol
+    momentum_balance_PETSc_rtol_save             = C%momentum_balance_PETSc_rtol
+    momentum_balance_PETSc_abstol_save           = C%momentum_balance_PETSc_abstol
     Glens_flow_law_epsilon_sq_0_save           = C%Glens_flow_law_epsilon_sq_0
 
     ! == Set temporary, less strict values of config parameters for the velocity solver
@@ -1217,8 +1217,8 @@ CONTAINS
     C%visc_it_relax                         = 0.3_dp                           ! Relaxation parameter for subsequent viscosity iterations (for improved stability)
     C%visc_eff_min                          = 1E5_dp                           ! Minimum value for effective viscosity
     C%vel_max                               = 5000._dp                         ! Velocities are limited to this value
-    C%stress_balance_PETSc_rtol             = 1E-3_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
-    C%stress_balance_PETSc_abstol           = 1E-2_dp                          ! PETSc solver - stop criterion, absolute difference
+    C%momentum_balance_PETSc_rtol             = 1E-3_dp                          ! PETSc solver - stop criterion, relative difference (iteration stops if rtol OR abstol is reached)
+    C%momentum_balance_PETSc_abstol           = 1E-2_dp                          ! PETSc solver - stop criterion, absolute difference
     C%Glens_flow_law_epsilon_sq_0           = 1E-6_dp                          ! Normalisation term so that zero strain rates produce a high but finite viscosity
 
     ! == Remap SMB, BMB, and LMB to get more stable ice thickness
@@ -1263,8 +1263,8 @@ CONTAINS
     C%visc_it_relax                         = visc_it_relax_save
     C%visc_eff_min                          = visc_eff_min_save
     C%vel_max                               = vel_max_save
-    C%stress_balance_PETSc_rtol             = stress_balance_PETSc_rtol_save
-    C%stress_balance_PETSc_abstol           = stress_balance_PETSc_abstol_save
+    C%momentum_balance_PETSc_rtol             = momentum_balance_PETSc_rtol_save
+    C%momentum_balance_PETSc_abstol           = momentum_balance_PETSc_abstol_save
     C%Glens_flow_law_epsilon_sq_0           = Glens_flow_law_epsilon_sq_0_save
 
     ! Finalise routine path
@@ -2061,9 +2061,9 @@ CONTAINS
     CALL init_routine( routine_name)
 
     ! Safety
-    IF (.NOT. (C%choice_stress_balance_approximation == 'SIA' .OR. &
-               C%choice_stress_balance_approximation == 'SSA' .OR. &
-               C%choice_stress_balance_approximation == 'SIA/SSA')) THEN
+    IF (.NOT. (C%choice_momentum_balance_approximation == 'SIA' .OR. &
+               C%choice_momentum_balance_approximation == 'SSA' .OR. &
+               C%choice_momentum_balance_approximation == 'SIA/SSA')) THEN
       CALL crash('direct timestepping only works for SIA, SSA, or SIA/SSA ice dynamics!')
     END IF
 
@@ -2080,15 +2080,15 @@ CONTAINS
     dt = dt_max
 
     ! Limit to the SIA critical time step
-    IF (C%choice_stress_balance_approximation == 'SIA' .OR. &
-        C%choice_stress_balance_approximation == 'SIA/SSA') THEN
+    IF (C%choice_momentum_balance_approximation == 'SIA' .OR. &
+        C%choice_momentum_balance_approximation == 'SIA/SSA') THEN
       CALL calc_critical_timestep_SIA( region%mesh, region%ice, dt_crit_SIA)
       dt = MIN( dt, dt_crit_SIA)
     END IF
 
     ! Limit to the advective critical time step
-    IF (C%choice_stress_balance_approximation == 'SSA' .OR. &
-        C%choice_stress_balance_approximation == 'SIA/SSA') THEN
+    IF (C%choice_momentum_balance_approximation == 'SSA' .OR. &
+        C%choice_momentum_balance_approximation == 'SIA/SSA') THEN
       CALL calc_critical_timestep_adv( region%mesh, region%ice, dt_crit_adv)
       dt = MIN( dt, dt_crit_adv)
     END IF

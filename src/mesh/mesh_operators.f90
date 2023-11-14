@@ -533,6 +533,7 @@ CONTAINS
     CALL calc_matrix_operators_mesh_c_b( mesh)
     CALL calc_matrix_operators_mesh_c_c( mesh)
 
+    CALL calc_matrix_operators_mesh_a_a_2nd_order( mesh)
     CALL calc_matrix_operators_mesh_b_b_2nd_order( mesh)
 
     ! Calculate the 1-D zeta operators (needed for thermodynamics)
@@ -691,6 +692,168 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_matrix_operators_mesh_a_a
+
+  SUBROUTINE calc_matrix_operators_mesh_a_a_2nd_order( mesh)
+    ! Calculate 2nd-order accurate d/dx, d/dy, d2/dx2, d2/dxdy, and d2/dy2 matrix
+    ! operators between the a-grid (vertices) and the a-grid (vertices)
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(INOUT) :: mesh
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_matrix_operators_mesh_a_a_2nd_order'
+    INTEGER                                            :: ncols, nrows, ncols_loc, nrows_loc, nnz_per_row_est, nnz_est_proc
+    INTEGER                                            :: row
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: x, y
+    INTEGER                                            :: vj
+    INTEGER                                            :: n_neighbours_min
+    INTEGER                                            :: n_neighbours_max
+    INTEGER,  DIMENSION(mesh%nV)                       :: map, stack
+    INTEGER                                            :: stackN
+    INTEGER                                            :: i
+    INTEGER                                            :: n_c
+    INTEGER,  DIMENSION(:    ), ALLOCATABLE            :: i_c
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: x_c, y_c
+    REAL(dp)                                           :: Nfx_i, Nfy_i, Nfxx_i, Nfxy_i, Nfyy_i
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE            :: Nfx_c, Nfy_c, Nfxx_c, Nfxy_c, Nfyy_c
+    LOGICAL                                            :: succeeded
+    INTEGER                                            :: col
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    n_neighbours_min = 5
+
+  ! == Initialise the matrices using the native UFEMISM CSR-matrix format
+  ! =====================================================================
+
+    ! Matrix size
+    ncols           = mesh%nV      ! from
+    ncols_loc       = mesh%nV_loc
+    nrows           = mesh%nV      ! to
+    nrows_loc       = mesh%nV_loc
+    nnz_per_row_est = mesh%nC_mem+1
+    nnz_est_proc    = nrows_loc * nnz_per_row_est
+
+    CALL allocate_matrix_CSR_dist( mesh%M2_ddx_a_a   , nrows, ncols, nrows_loc, ncols_loc, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_ddy_a_a   , nrows, ncols, nrows_loc, ncols_loc, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_d2dx2_a_a , nrows, ncols, nrows_loc, ncols_loc, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_d2dxdy_a_a, nrows, ncols, nrows_loc, ncols_loc, nnz_est_proc)
+    CALL allocate_matrix_CSR_dist( mesh%M2_d2dy2_a_a , nrows, ncols, nrows_loc, ncols_loc, nnz_est_proc)
+
+  ! Calculate shape functions and fill them into the matrices
+  ! =========================================================
+
+    ! Allocate memory for map, stack, and shape functions
+    n_neighbours_max = mesh%nC_mem**2
+    ALLOCATE( i_c(    n_neighbours_max))
+    ALLOCATE( x_c(    n_neighbours_max))
+    ALLOCATE( y_c(    n_neighbours_max))
+    ALLOCATE( Nfx_c(  n_neighbours_max))
+    ALLOCATE( Nfy_c(  n_neighbours_max))
+    ALLOCATE( Nfxx_c( n_neighbours_max))
+    ALLOCATE( Nfxy_c( n_neighbours_max))
+    ALLOCATE( Nfyy_c( n_neighbours_max))
+
+    map    = 0
+    stack  = 0
+    stackN = 0
+
+    DO row = mesh%M_ddx_a_a%i1, mesh%M_ddx_a_a%i2
+
+      ! The vertex represented by this matrix row
+      vi = mesh%n2vi( row)
+      x  = mesh%V( vi,1)
+      y  = mesh%V( vi,2)
+
+      ! Clean up previous map
+      DO i = 1, stackN
+        vj = stack( i)
+        map( vj) = 0
+      END DO
+
+      ! Initialise the list of neighbours: just vi itself
+      map( vi)  = 1
+      stackN    = 1
+      stack( 1) = vi
+
+      ! Extend outward until enough neighbours are found to calculate the shape functions
+      DO WHILE (stackN - 1 < n_neighbours_min)
+        CALL extend_group_single_iteration_a( mesh, map, stack, stackN)
+        ! Safety
+        IF (stackN - 1 > n_neighbours_max) CALL crash('expanded local neighbourhood too far!')
+      END DO
+
+      ! Calculate shape functions; if this fails, add more neighbours until it succeeds
+      succeeded = .FALSE.
+      DO WHILE (.NOT. succeeded)
+
+        ! Get the coordinates of the neighbours
+        n_c = 0
+        DO i = 1, stackN
+          IF (n_c == n_neighbours_max) EXIT
+          vj = stack( i)
+          IF (vj == vi) CYCLE
+          n_c = n_c + 1
+          i_c( n_c) = vj
+          x_c( n_c) = mesh%V( vj,1)
+          y_c( n_c) = mesh%V( vj,2)
+        END DO
+
+        ! Calculate shape functions
+        CALL calc_shape_functions_2D_reg_2nd_order( x, y, n_neighbours_max, n_c, x_c, y_c, Nfx_i, Nfy_i, Nfxx_i, Nfxy_i, Nfyy_i, Nfx_c, Nfy_c, Nfxx_c, Nfxy_c, Nfyy_c, succeeded)
+
+        ! If the shape functions couldnt be calculated, include more neighbours and try again
+        IF (.NOT. succeeded) CALL extend_group_single_iteration_a( mesh, map, stack, stackN)
+
+      END DO ! DO WHILE (.NOT. succeeded)
+
+      ! Fill them into the matrices
+
+      ! Diagonal elements: shape functions for the home element
+      CALL add_entry_CSR_dist( mesh%M2_ddx_a_a   , row, row, Nfx_i )
+      CALL add_entry_CSR_dist( mesh%M2_ddy_a_a   , row, row, Nfy_i )
+      CALL add_entry_CSR_dist( mesh%M2_d2dx2_a_a , row, row, Nfxx_i)
+      CALL add_entry_CSR_dist( mesh%M2_d2dxdy_a_a, row, row, Nfxy_i)
+      CALL add_entry_CSR_dist( mesh%M2_d2dy2_a_a , row, row, Nfyy_i)
+
+      ! Off-diagonal elements: shape functions for the neighbours
+      DO i = 1, n_c
+        vj = i_c( i)
+        col = mesh%vi2n( vj)
+        CALL add_entry_CSR_dist( mesh%M2_ddx_a_a   , row, col, Nfx_c ( i))
+        CALL add_entry_CSR_dist( mesh%M2_ddy_a_a   , row, col, Nfy_c ( i))
+        CALL add_entry_CSR_dist( mesh%M2_d2dx2_a_a , row, col, Nfxx_c( i))
+        CALL add_entry_CSR_dist( mesh%M2_d2dxdy_a_a, row, col, Nfxy_c( i))
+        CALL add_entry_CSR_dist( mesh%M2_d2dy2_a_a , row, col, Nfyy_c( i))
+      END DO
+
+    END DO ! DO row = row1, row2
+
+    ! Crop matrix memory
+    CALL crop_matrix_CSR_dist( mesh%M2_ddx_a_a   )
+    CALL crop_matrix_CSR_dist( mesh%M2_ddy_a_a   )
+    CALL crop_matrix_CSR_dist( mesh%M2_d2dx2_a_a )
+    CALL crop_matrix_CSR_dist( mesh%M2_d2dxdy_a_a)
+    CALL crop_matrix_CSR_dist( mesh%M2_d2dy2_a_a )
+
+    ! Clean up after yourself
+    DEALLOCATE( i_c   )
+    DEALLOCATE( x_c   )
+    DEALLOCATE( y_c   )
+    DEALLOCATE( Nfx_c )
+    DEALLOCATE( Nfy_c )
+    DEALLOCATE( Nfxx_c)
+    DEALLOCATE( Nfxy_c)
+    DEALLOCATE( Nfyy_c)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_matrix_operators_mesh_a_a_2nd_order
 
   SUBROUTINE calc_matrix_operators_mesh_a_b( mesh)
     ! Calculate mapping, d/dx, and d/dy matrix operators between the a-grid (vertices) and the b-grid (triangles)

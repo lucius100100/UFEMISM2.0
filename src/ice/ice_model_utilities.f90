@@ -20,7 +20,7 @@ MODULE ice_model_utilities
   USE ice_model_types                                        , ONLY: type_ice_model
   USE reference_geometries                                   , ONLY: type_reference_geometry
   USE mpi_distributed_memory                                 , ONLY: gather_to_all_logical_1D
-  USE math_utilities                                         , ONLY: is_floating, triangle_area, oblique_sg_projection, is_in_polygon
+  USE math_utilities                                         , ONLY: is_floating, triangle_area, oblique_sg_projection, is_in_polygon, ice_surface_elevation
   USE mesh_remapping                                         , ONLY: Atlas, create_map_from_xy_grid_to_mesh, create_map_from_xy_grid_to_mesh_triangles
   USE petsc_basic                                            , ONLY: mat_petsc2CSR
   USE CSR_sparse_matrix_utilities                            , ONLY: type_sparse_matrix_CSR_dp, deallocate_matrix_CSR_dist
@@ -1504,73 +1504,42 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                   INTENT(INOUT) :: ice
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_zeta_gradients'
-    ! REAL(dp), DIMENSION(:    ), POINTER                :: Hi_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHi_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHi_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hi_dx2_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hi_dxdy_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hi_dy2_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: Hi_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHi_dx_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHi_dy_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hi_dx2_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hi_dxdy_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hi_dy2_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: Hs_b
-    ! REAL(dp), DIMENSION(:    ), POINTER                :: Hs_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHs_dx_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHs_dy_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hs_dx2_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hs_dxdy_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hs_dy2_a
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHs_dx_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: dHs_dy_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hs_dx2_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hs_dxdy_b
-    REAL(dp), DIMENSION(:    ), POINTER                :: d2Hs_dy2_b
+    ! REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: Hi_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: dHi_dx_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: dHi_dy_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: d2Hi_dx2_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: d2Hi_dxdy_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: d2Hi_dy2_a
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: Hi_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: dHi_dx_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: dHi_dy_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: d2Hi_dx2_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: d2Hi_dxdy_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: d2Hi_dy2_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: Hs_b
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: dHs_dx_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: dHs_dy_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: d2Hs_dx2_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: d2Hs_dxdy_a
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)             :: d2Hs_dy2_a
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: dHs_dx_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: dHs_dy_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: d2Hs_dx2_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: d2Hs_dxdy_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)             :: d2Hs_dy2_b
     INTEGER                                            :: vi,ti,k,ks
     REAL(dp)                                           :: Hi, zeta
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Allocate shared memory
-    ! ALLOCATE( Hi_a(        mesh%vi1:mesh%vi2))
-    ALLOCATE( dHi_dx_a(    mesh%vi1:mesh%vi2))
-    ALLOCATE( dHi_dy_a(    mesh%vi1:mesh%vi2))
-    ALLOCATE( d2Hi_dx2_a(  mesh%vi1:mesh%vi2))
-    ALLOCATE( d2Hi_dxdy_a( mesh%vi1:mesh%vi2))
-    ALLOCATE( d2Hi_dy2_a(  mesh%vi1:mesh%vi2))
-
-    ALLOCATE( Hi_b(        mesh%ti1:mesh%ti2))
-    ALLOCATE( dHi_dx_b(    mesh%ti1:mesh%ti2))
-    ALLOCATE( dHi_dy_b(    mesh%ti1:mesh%ti2))
-    ALLOCATE( d2Hi_dx2_b(  mesh%ti1:mesh%ti2))
-    ALLOCATE( d2Hi_dxdy_b( mesh%ti1:mesh%ti2))
-    ALLOCATE( d2Hi_dy2_b(  mesh%ti1:mesh%ti2))
-
-    ! ALLOCATE( Hs_a(        mesh%vi1:mesh%vi2))
-    ALLOCATE( dHs_dx_a(    mesh%vi1:mesh%vi2))
-    ALLOCATE( dHs_dy_a(    mesh%vi1:mesh%vi2))
-    ALLOCATE( d2Hs_dx2_a(  mesh%vi1:mesh%vi2))
-    ALLOCATE( d2Hs_dxdy_a( mesh%vi1:mesh%vi2))
-    ALLOCATE( d2Hs_dy2_a(  mesh%vi1:mesh%vi2))
-
-    ALLOCATE( Hs_b(        mesh%ti1:mesh%ti2))
-    ALLOCATE( dHs_dx_b(    mesh%ti1:mesh%ti2))
-    ALLOCATE( dHs_dy_b(    mesh%ti1:mesh%ti2))
-    ALLOCATE( d2Hs_dx2_b(  mesh%ti1:mesh%ti2))
-    ALLOCATE( d2Hs_dxdy_b( mesh%ti1:mesh%ti2))
-    ALLOCATE( d2Hs_dy2_b(  mesh%ti1:mesh%ti2))
-
     ! Calculate gradients of Hi and Hs on both grids
 
-    ! CALL map_a_a_2D( mesh, ice%Hi_a, Hi_a       )
     CALL ddx_a_a_2D( mesh, ice%Hi  , dHi_dx_a   )
     CALL ddy_a_a_2D( mesh, ice%Hi  , dHi_dy_a   )
     CALL map_a_b_2D( mesh, ice%Hi  , Hi_b       )
@@ -1583,7 +1552,6 @@ CONTAINS
     CALL ddy_a_b_2D( mesh, dHi_dx_a, d2Hi_dxdy_b)
     CALL ddy_a_b_2D( mesh, dHi_dy_a, d2Hi_dy2_b )
 
-    ! CALL map_a_a_2D( mesh, ice%Hs_a, Hs_a       )
     CALL ddx_a_a_2D( mesh, ice%Hs  , dHs_dx_a   )
     CALL ddy_a_a_2D( mesh, ice%Hs  , dHs_dy_a   )
     CALL map_a_b_2D( mesh, ice%Hs  , Hs_b       )
@@ -1659,35 +1627,6 @@ CONTAINS
 
       END DO
     END DO
-
-    ! Clean after yourself
-    ! DEALLOCATE( Hi_a        )
-    DEALLOCATE( dHi_dx_a    )
-    DEALLOCATE( dHi_dy_a    )
-    DEALLOCATE( d2Hi_dx2_a  )
-    DEALLOCATE( d2Hi_dxdy_a )
-    DEALLOCATE( d2Hi_dy2_a  )
-
-    DEALLOCATE( Hi_b        )
-    DEALLOCATE( dHi_dx_b    )
-    DEALLOCATE( dHi_dy_b    )
-    DEALLOCATE( d2Hi_dx2_b  )
-    DEALLOCATE( d2Hi_dxdy_b )
-    DEALLOCATE( d2Hi_dy2_b  )
-
-    ! DEALLOCATE( Hs_a        )
-    DEALLOCATE( dHs_dx_a    )
-    DEALLOCATE( dHs_dy_a    )
-    DEALLOCATE( d2Hs_dx2_a  )
-    DEALLOCATE( d2Hs_dxdy_a )
-    DEALLOCATE( d2Hs_dy2_a  )
-
-    DEALLOCATE( Hs_b        )
-    DEALLOCATE( dHs_dx_b    )
-    DEALLOCATE( dHs_dy_b    )
-    DEALLOCATE( d2Hs_dx2_b  )
-    DEALLOCATE( d2Hs_dxdy_b )
-    DEALLOCATE( d2Hs_dy2_b  )
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

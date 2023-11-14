@@ -18,6 +18,9 @@ MODULE mesh_utilities
   USE mpi_distributed_memory                                 , ONLY: gather_to_master_int_1D, gather_to_master_dp_1D, &
                                                                      distribute_from_master_int_1D, distribute_from_master_dp_1D, &
                                                                      gather_to_all_int_1D, gather_to_all_dp_1D
+  USE CSR_sparse_matrix_utilities                            , ONLY: type_sparse_matrix_CSR_dp, allocate_matrix_CSR_dist, add_entry_CSR_dist, read_single_row_CSR_dist, &
+                                                                     deallocate_matrix_CSR_dist
+  USE petsc_basic                                            , ONLY: solve_matrix_equation_CSR_PETSc
 
   IMPLICIT NONE
 
@@ -1716,6 +1719,268 @@ CONTAINS
 
   END SUBROUTINE extrapolate_Gaussian
 
+! == Extrapolation by diffusion
+
+  SUBROUTINE extrapolate_diffusion_mesh_a( mesh, mask, d, PETSc_rtol, PETSc_abstol)
+    ! Extrapolate the data field d into the area designated by the mask,
+    ! using Gaussian extrapolation of sigma
+    !
+    ! Note about the mask:
+    !    1 = data provided
+    !    0 = to be found
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2), INTENT(IN)    :: mask
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                     INTENT(IN)    :: PETSc_rtol
+    REAL(dp), OPTIONAL,                     INTENT(IN)    :: PETSc_abstol
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'extrapolate_diffusion_mesh_a'
+    INTEGER                                               :: ncols, ncols_loc, nrows, nrows_loc, nnz_est_proc
+    TYPE(type_sparse_matrix_CSR_dp)                       :: A_CSR
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: bb
+    INTEGER                                               :: row_vi,vi,ci,vj,col_vj
+    REAL(dp)                                              :: PETSc_rtol_applied, PETSc_abstol_applied
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Tolerances
+    IF (PRESENT( PETSc_rtol)) THEN
+      PETSc_rtol_applied = PETSc_rtol
+    ELSE
+      PETSc_rtol_applied = 1E-5_dp
+    END IF
+    IF (PRESENT( PETSc_abstol)) THEN
+      PETSc_abstol_applied = PETSc_abstol
+    ELSE
+      PETSc_abstol_applied = 1E-5_dp
+    END IF
+
+  ! == Initialise the stiffness matrix using the native UFEMISM CSR-matrix format
+  ! =============================================================================
+
+    ! Matrix size
+    ncols           = mesh%nV          ! from
+    ncols_loc       = mesh%nV_loc
+    nrows           = mesh%nV          ! to
+    nrows_loc       = mesh%nV_loc
+    nnz_est_proc    = mesh%M2_ddx_a_a%nnz
+
+    CALL allocate_matrix_CSR_dist( A_CSR, nrows, ncols, nrows_loc, ncols_loc, nnz_est_proc)
+
+  ! == Construct the stiffness matrix for the diffusion equation
+  ! ============================================================
+
+    DO row_vi = A_CSR%i1, A_CSR%i2
+
+      vi = mesh%n2vi( row_vi)
+
+      IF (mask( vi) == 1) THEN
+        ! Dirichlet boundary condition; solution is prescribed for this vertex
+
+        ! Stiffness matrix: diagonal element set to 1
+        CALL add_entry_CSR_dist( A_CSR, row_vi, row_vi, 1._dp)
+
+        ! Load vector: prescribed solution
+        bb( row_vi) = d( vi)
+
+      ELSEIF (mesh%VBI( vi) > 0) THEN
+        ! Domain border
+
+        ! Set f on this triangle equal to the average value on its neighbours
+        DO ci = 1, mesh%nC( vi)
+          vj = mesh%C( vi,ci)
+          col_vj = mesh%vi2n( vj)
+          CALL add_entry_CSR_dist( A_CSR, row_vi, col_vj, 1._dp)
+        END DO
+        CALL add_entry_CSR_dist( A_CSR, row_vi, row_vi, -1._dp * REAL( mesh%nC( vi),dp))
+
+        ! Load vector
+        bb( row_vi) = 0._dp
+
+      ELSE
+        ! No boundary conditions apply; solve the diffusion equation
+
+        CALL calc_diffusion_stiffness_matrix_row( mesh, A_CSR, bb, row_vi)
+
+      END IF
+
+    END DO ! DO row_tiuv = A_CSR%i1, A_CSR%i2
+
+  ! == Solve the matrix equation
+  ! ============================
+
+    ! Use PETSc to solve the matrix equation
+    CALL solve_matrix_equation_CSR_PETSc( A_CSR, bb, d, PETSc_rtol_applied, PETSc_abstol_applied)
+
+    ! Clean up after yourself
+    CALL deallocate_matrix_CSR_dist( A_CSR)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE extrapolate_diffusion_mesh_a
+
+  SUBROUTINE extrapolate_diffusion_mesh_a_fixed_border( mesh, mask, d, d_border, PETSc_rtol, PETSc_abstol)
+    ! Extrapolate the data field d into the area designated by the mask,
+    ! using Gaussian extrapolation of sigma
+    !
+    ! Note about the mask:
+    !    1 = data provided
+    !    0 = to be found
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2), INTENT(IN)    :: mask
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(INOUT) :: d
+    REAL(dp), OPTIONAL,                     INTENT(IN)    :: d_border
+    REAL(dp), OPTIONAL,                     INTENT(IN)    :: PETSc_rtol
+    REAL(dp), OPTIONAL,                     INTENT(IN)    :: PETSc_abstol
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'extrapolate_diffusion_mesh_a_fixed_border'
+    INTEGER                                               :: ncols, ncols_loc, nrows, nrows_loc, nnz_est_proc
+    TYPE(type_sparse_matrix_CSR_dp)                       :: A_CSR
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: bb
+    INTEGER                                               :: row_vi,vi
+    REAL(dp)                                              :: PETSc_rtol_applied, PETSc_abstol_applied
+    REAL(dp)                                              :: d_border_applied
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Tolerances
+    IF (PRESENT( PETSc_rtol)) THEN
+      PETSc_rtol_applied = PETSc_rtol
+    ELSE
+      PETSc_rtol_applied = 1E-5_dp
+    END IF
+    IF (PRESENT( PETSc_abstol)) THEN
+      PETSc_abstol_applied = PETSc_abstol
+    ELSE
+      PETSc_abstol_applied = 1E-5_dp
+    END IF
+
+    ! Border value
+    IF (PRESENT( d_border)) THEN
+      d_border_applied = d_border
+    ELSE
+      d_border_applied = 0._dp
+    END IF
+
+  ! == Initialise the stiffness matrix using the native UFEMISM CSR-matrix format
+  ! =============================================================================
+
+    ! Matrix size
+    ncols           = mesh%nV          ! from
+    ncols_loc       = mesh%nV_loc
+    nrows           = mesh%nV          ! to
+    nrows_loc       = mesh%nV_loc
+    nnz_est_proc    = mesh%M2_ddx_a_a%nnz
+
+    CALL allocate_matrix_CSR_dist( A_CSR, nrows, ncols, nrows_loc, ncols_loc, nnz_est_proc)
+
+  ! == Construct the stiffness matrix for the diffusion equation
+  ! ============================================================
+
+    DO row_vi = A_CSR%i1, A_CSR%i2
+
+      vi = mesh%n2vi( row_vi)
+
+      IF (mask( vi) == 1) THEN
+        ! Dirichlet boundary condition; solution is prescribed for this vertex
+
+        ! Stiffness matrix: diagonal element set to 1
+        CALL add_entry_CSR_dist( A_CSR, row_vi, row_vi, 1._dp)
+
+        ! Load vector: prescribed solution
+        bb( row_vi) = d( vi)
+
+      ELSEIF (mesh%VBI( vi) > 0) THEN
+        ! Domain border
+
+        ! Stiffness matrix: diagonal element set to 1
+        CALL add_entry_CSR_dist( A_CSR, row_vi, row_vi, 1._dp)
+
+        ! Load vector: prescribed solution
+        bb( row_vi) = d_border_applied
+
+      ELSE
+        ! No boundary conditions apply; solve the diffusion equation
+
+        CALL calc_diffusion_stiffness_matrix_row( mesh, A_CSR, bb, row_vi)
+
+      END IF
+
+    END DO ! DO row_tiuv = A_CSR%i1, A_CSR%i2
+
+  ! == Solve the matrix equation
+  ! ============================
+
+    ! Use PETSc to solve the matrix equation
+    CALL solve_matrix_equation_CSR_PETSc( A_CSR, bb, d, PETSc_rtol_applied, PETSc_abstol_applied)
+
+    ! Clean up after yourself
+    CALL deallocate_matrix_CSR_dist( A_CSR)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE extrapolate_diffusion_mesh_a_fixed_border
+
+  SUBROUTINE calc_diffusion_stiffness_matrix_row( mesh, A_CSR, bb, row_vi)
+    ! Add coefficients to this matrix row to represent the diffusion equation: d2f/dx2 + d2f/dy2 = 0
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                     INTENT(IN)              :: mesh
+    TYPE(type_sparse_matrix_CSR_dp),     INTENT(INOUT)           :: A_CSR
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2), INTENT(INOUT)        :: bb
+    INTEGER,                             INTENT(IN)              :: row_vi
+
+    ! Local variables:
+    INTEGER                                                      :: vi
+    INTEGER,  DIMENSION(mesh%nC_mem)                             :: single_row_ind
+    REAL(dp), DIMENSION(mesh%nC_mem)                             :: single_row_d2dx2_val
+    REAL(dp), DIMENSION(mesh%nC_mem)                             :: single_row_d2dy2_val
+    INTEGER                                                      :: single_row_nnz
+    REAL(dp)                                                     :: A_val
+    INTEGER                                                      :: k, vj, col_vj
+
+    ! Relevant indices for this vertex
+    vi = mesh%n2vi( row_vi)
+
+    ! Read coefficients of the operator matrices
+    CALL read_single_row_CSR_dist( mesh%M2_d2dx2_a_a, vi, single_row_ind, single_row_d2dx2_val , single_row_nnz)
+    CALL read_single_row_CSR_dist( mesh%M2_d2dy2_a_a, vi, single_row_ind, single_row_d2dy2_val , single_row_nnz)
+
+    DO k = 1, single_row_nnz
+
+      ! Relevant indices for this neighbouring triangle
+      vj = single_row_ind( k)
+      col_vj = mesh%vi2n( vj)
+
+      ! Combine the mesh operators
+      A_val = single_row_d2dx2_val( k) + single_row_d2dy2_val( k)
+
+      ! Add coefficient to the stiffness matrix
+      CALL add_entry_CSR_dist( A_CSR, row_vi, col_vj, A_val)
+
+    END DO
+
+    ! Load vector
+    bb( row_vi) = 0._dp
+
+  END SUBROUTINE calc_diffusion_stiffness_matrix_row
+
 ! == Contours and polygons for mesh generation
 
   SUBROUTINE calc_mesh_contour_as_line( mesh, d, f, line, mask)
@@ -2521,7 +2786,7 @@ CONTAINS
 
       ELSEIF (mesh%VBI(vi) == 2) THEN
 
-        IF (.NOT. vi==3) CALL warning('vertex {int_01} is listed as NE corner!', int_01 = vi)
+        !IF (.NOT. vi==3) CALL warning('vertex {int_01} is listed as NE corner!', int_01 = vi)
 
         IF (ABS(mesh%V(vi,1) - mesh%xmax) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymax) > mesh%tol_dist) THEN
           CALL warning('vertex {int_01} has border index 2 but does not lie on the NE corner!', int_01 = vi)
@@ -2551,7 +2816,7 @@ CONTAINS
 
       ELSEIF (mesh%VBI(vi) == 4) THEN
 
-        IF (.NOT. vi==2) CALL warning('vertex {int_01} is listed as SE corner!', int_01 = vi)
+        !IF (.NOT. vi==2) CALL warning('vertex {int_01} is listed as SE corner!', int_01 = vi)
 
         IF (ABS(mesh%V(vi,1) - mesh%xmax) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymin) > mesh%tol_dist) THEN
           CALL warning('vertex {int_01} has border index 4 but does not lie on the SE corner!', int_01 = vi)
@@ -2581,7 +2846,7 @@ CONTAINS
 
       ELSEIF (mesh%VBI(vi) == 6) THEN
 
-        IF (.NOT. vi==1) CALL warning('vertex {int_01} is listed as SW corner!', int_01 = vi)
+        !IF (.NOT. vi==1) CALL warning('vertex {int_01} is listed as SW corner!', int_01 = vi)
 
         IF (ABS(mesh%V(vi,1) - mesh%xmin) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymin) > mesh%tol_dist) THEN
           CALL warning('vertex {int_01} has border index 6 but does not lie on the SW corner!', int_01 = vi)
@@ -2611,7 +2876,7 @@ CONTAINS
 
       ELSEIF (mesh%VBI(vi) == 8) THEN
 
-        IF (.NOT. vi==4) CALL warning('vertex {int_01} is listed as NW corner!', int_01 = vi)
+        !IF (.NOT. vi==4) CALL warning('vertex {int_01} is listed as NW corner!', int_01 = vi)
 
         IF (ABS(mesh%V(vi,1) - mesh%xmin) > mesh%tol_dist .OR. ABS(mesh%V(vi,2) - mesh%ymax) > mesh%tol_dist) THEN
           CALL warning('vertex {int_01} has border index 8 but does not lie on the NW corner!', int_01 = vi)

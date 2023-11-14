@@ -181,6 +181,13 @@ MODULE mesh_types
     TYPE(type_sparse_matrix_CSR_dp)         :: M_ddx_c_c
     TYPE(type_sparse_matrix_CSR_dp)         :: M_ddy_c_c
 
+    ! a-grid (vertices) to a-grid (vertices), 2nd-order accurate
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_a_a
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_a_a
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dx2_a_a
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dxdy_a_a
+    TYPE(type_sparse_matrix_CSR_dp)         :: M2_d2dy2_a_a
+
     ! b-grid (triangles) to b-grid (triangles), 2nd-order accurate
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddx_b_b
     TYPE(type_sparse_matrix_CSR_dp)         :: M2_ddy_b_b

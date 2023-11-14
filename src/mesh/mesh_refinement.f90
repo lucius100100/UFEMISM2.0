@@ -558,32 +558,32 @@ CONTAINS
       n2 = 0
       is_in_poly_not = .FALSE.
 
-      DO WHILE (PRESENT(poly_mult_not) .AND. n2 < SIZE( poly_mult_not,1))
-
-        ! Copy a single polygon from poly_mult
-        nn = NINT( poly_mult_not( n1,1))
-        n2 = n1 + nn
-        ALLOCATE( poly_not( nn,2))
-        poly_not = poly_mult_not( n1+1:n2,:)
-        n1 = n2+1
-
-        IF (is_in_polygon( poly_not, va) .AND. &
-            is_in_polygon( poly_not, vb) .AND. &
-            is_in_polygon( poly_not, vc)) THEN
-          ! Triangle lies within the no-remesh zone
-          is_in_poly_not = .TRUE.
-        END IF
-
-        ! Clean up after yourself
-        DEALLOCATE( poly_not)
-
-        ! If we already know, stop checking
-        IF (is_in_poly_not) EXIT
-
-      END DO ! DO WHILE (n2 < SIZE( poly_mult_not,1))
-
-      ! Triangle overlaps with the no-remesh zone, so skip it
-      IF (is_in_poly_not) CYCLE
+!      DO WHILE (PRESENT(poly_mult_not) .AND. n2 < SIZE( poly_mult_not,1))
+!
+!        ! Copy a single polygon from poly_mult
+!        nn = NINT( poly_mult_not( n1,1))
+!        n2 = n1 + nn
+!        ALLOCATE( poly_not( nn,2))
+!        poly_not = poly_mult_not( n1+1:n2,:)
+!        n1 = n2+1
+!
+!        IF (is_in_polygon( poly_not, va) .AND. &
+!            is_in_polygon( poly_not, vb) .AND. &
+!            is_in_polygon( poly_not, vc)) THEN
+!          ! Triangle lies within the no-remesh zone
+!          is_in_poly_not = .TRUE.
+!        END IF
+!
+!        ! Clean up after yourself
+!        DEALLOCATE( poly_not)
+!
+!        ! If we already know, stop checking
+!        IF (is_in_poly_not) EXIT
+!
+!      END DO ! DO WHILE (n2 < SIZE( poly_mult_not,1))
+!
+!      ! Triangle overlaps with the no-remesh zone, so skip it
+!      IF (is_in_poly_not) CYCLE
 
       ! If this triangle lies (partly) inside the polygon, mark it for refinement
       IF (is_in_polygon( poly, va) .OR. &

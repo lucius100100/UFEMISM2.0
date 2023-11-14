@@ -23,6 +23,7 @@ MODULE basal_hydrology
   USE math_utilities                                         , ONLY: triangle_area, is_floating
   USE mpi_distributed_memory                                 , ONLY: gather_to_all_dp_1D, gather_to_all_logical_1D
   USE mesh_remapping                                         , ONLY: smooth_Gaussian_2D
+  USE netcdf_input                                           , ONLY: read_field_from_file_2D
 
   IMPLICIT NONE
 
@@ -63,6 +64,15 @@ CONTAINS
     ELSEIF (C%choice_basal_hydrology_model == 'inversion') THEN
       ! Inversion of pore water pressure
       CALL calc_pore_water_pressure_inversion( mesh, ice, HIV)
+    ELSEIF (C%choice_basal_hydrology_model == 'prescribed_pore_water_fraction') THEN
+      ! Use the pore water fraction from an external file
+
+      ! Compute pore water pressure based on the pore water fraction as
+      ! the fraction of the overburden pressure supported by basal water
+      DO vi = mesh%vi1, mesh%vi2
+        ice%pore_water_pressure( vi) = ice%pore_water_fraction(vi) * ice_density * grav * ice%Hi_eff( vi)
+      END DO
+
     ELSE
       CALL crash('unknown choice_basal_hydrology_model "' // TRIM( C%choice_basal_hydrology_model) // '"!')
     END IF
@@ -107,14 +117,45 @@ CONTAINS
       ! No need to do anything
     ELSEIF (C%choice_basal_hydrology_model == 'inversion') THEN
       ! No need to do anything
+    ELSEIF (C%choice_basal_hydrology_model == 'prescribed_pore_water_fraction') THEN
+      ! No need to do anything
     ELSE
       CALL crash('unknown choice_basal_hydrology_model "' // TRIM( C%choice_basal_hydrology_model) // '"')
+    END IF
+
+    ! Initialise the pore water fraction
+    IF (C%do_init_pore_water_fraction_from_file) THEN
+      ! Initialise pore water fraction from an external file
+      CALL initialise_pore_water_fraction_from_file( mesh, ice)
     END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE initialise_basal_hydrology_model
+
+  SUBROUTINE initialise_pore_water_fraction_from_file( mesh, ice)
+    ! Initialise pore water fraction from an external file
+
+    IMPLICIT NONE
+
+    ! Input variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_pore_water_fraction_from_file'
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Initialise pore water fraction from an external file
+    CALL read_field_from_file_2D( C%filename_pore_water_fraction, 'pore_water_fraction', mesh, ice%pore_water_fraction, C%timeframe_pore_water_fraction)
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE initialise_pore_water_fraction_from_file
 
 ! ===== Different basal hydrology models ====
 ! ===========================================
@@ -350,9 +391,9 @@ CONTAINS
     ALLOCATE( HIV%pore_water_fraction_app(  mesh%vi1:mesh%vi2))
     ALLOCATE( HIV%mask_inverted_point(      mesh%vi1:mesh%vi2))
 
-    HIV%pore_water_fraction_prev = 0._dp
-    HIV%pore_water_fraction_next = 0._dp
-    HIV%pore_water_fraction_app  = 0._dp
+    HIV%pore_water_fraction_prev = ice%pore_water_fraction
+    HIV%pore_water_fraction_next = ice%pore_water_fraction
+    HIV%pore_water_fraction_app  = ice%pore_water_fraction
     HIV%mask_inverted_point  = .FALSE.
 
     ! Timeframes

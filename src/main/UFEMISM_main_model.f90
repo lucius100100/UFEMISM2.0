@@ -409,6 +409,9 @@ CONTAINS
     CHARACTER(LEN=256)                                                 :: grid_name
     REAL(dp)                                                           :: dx_grid_smooth, dx_grid_output
 
+    CHARACTER(LEN=256) :: filename
+    INTEGER :: ncid
+
     ! Add routine to path
     CALL init_routine( routine_name)
 
@@ -448,6 +451,14 @@ CONTAINS
 
     ! Set up the first model mesh
     CALL setup_first_mesh( region)
+
+    ! DENK DROM
+
+    ! Create a NetCDF output file
+    filename = TRIM( C%output_dir) // 'testmesh.nc'
+    CALL create_new_netcdf_file_for_writing( filename, ncid)
+    CALL setup_mesh_in_netcdf_file( filename, ncid, region%mesh)
+    CALL close_netcdf_file( ncid)
 
     ! Remap reference geometries from their raw input grids to the model mesh
     CALL initialise_reference_geometries_on_model_mesh( region%name, region%mesh, region%refgeo_init, region%refgeo_PD, region%refgeo_GIAeq)

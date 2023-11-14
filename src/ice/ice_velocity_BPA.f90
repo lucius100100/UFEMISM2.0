@@ -30,7 +30,7 @@ MODULE ice_velocity_BPA
   USE netcdf_output                                          , ONLY: generate_filename_XXXXXdotnc, setup_mesh_in_netcdf_file, add_time_dimension_to_file, &
                                                                      add_zeta_dimension_to_file, add_field_mesh_dp_3D_b, write_time_to_file, write_to_field_multopt_mesh_dp_3D_b
   USE netcdf_input                                           , ONLY: read_field_from_mesh_file_3D_b
-  USE mpi_distributed_memory                                 , ONLY: gather_to_all_dp_2D
+  USE mpi_distributed_memory                                 , ONLY: gather_to_all_dp_2D, gather_to_all_logical_1D
   USE ice_flow_laws                                          , ONLY: calc_effective_viscosity_Glen_3D_uv_only, calc_ice_rheology_Glen
   USE ice_model_utilities                                    , ONLY: calc_zeta_gradients
   USE reallocate_mod                                         , ONLY: reallocate_bounds, reallocate_clean
@@ -45,19 +45,18 @@ CONTAINS
 
 ! == Main routines
 
-  SUBROUTINE initialise_BPA_solver( mesh, BPA, region_name)
+  SUBROUTINE initialise_BPA_solver( mesh, ice, BPA)
     ! Initialise the BPA solver
 
     IMPLICIT NONE
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(IN)    :: ice
     TYPE(type_ice_velocity_solver_BPA),  INTENT(OUT)   :: BPA
-    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BPA_solver'
-    CHARACTER(LEN=256)                                 :: choice_initial_velocity
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -65,32 +64,13 @@ CONTAINS
     ! Allocate memory
     CALL allocate_BPA_solver( mesh, BPA)
 
-    ! Determine the choice of initial velocities for this model region
-    IF     (region_name == 'NAM') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_NAM
-    ELSEIF (region_name == 'EAS') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_EAS
-    ELSEIF (region_name == 'GRL') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_GRL
-    ELSEIF (region_name == 'ANT') THEN
-      choice_initial_velocity  = C%choice_initial_velocity_ANT
-    ELSE
-      CALL crash('unknown model region "' // region_name // '"!')
-    END IF
-
-    ! Initialise velocities according to the specified method
-    IF     (choice_initial_velocity == 'zero') THEN
-      BPA%u_bk = 0._dp
-      BPA%v_bk = 0._dp
-    ELSEIF (choice_initial_velocity == 'read_from_file') THEN
-      CALL initialise_BPA_velocities_from_file( mesh, BPA, region_name)
-    ELSE
-      CALL crash('unknown choice_initial_velocity "' // TRIM( choice_initial_velocity) // '"!')
-    END IF
+    ! Initialise ice velocities
+    BPA%u_bk = ice%u_3D_b
+    BPA%v_bk = ice%v_3D_b
 
     ! Set tolerances for PETSc matrix solver for the linearised BPA
-    BPA%PETSc_rtol   = C%stress_balance_PETSc_rtol
-    BPA%PETSc_abstol = C%stress_balance_PETSc_abstol
+    BPA%PETSc_rtol   = C%momentum_balance_PETSc_rtol
+    BPA%PETSc_abstol = C%momentum_balance_PETSc_abstol
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -113,16 +93,16 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'solve_BPA'
     LOGICAL                                                      :: grounded_ice_exists
-    INTEGER,  DIMENSION(:,:  ), ALLOCATABLE                      :: BC_prescr_mask_bk_applied
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE                      :: BC_prescr_u_bk_applied
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE                      :: BC_prescr_v_bk_applied
+    INTEGER,  DIMENSION(mesh%ti1:mesh%ti2,mesh%nz)               :: BC_prescr_mask_bk_applied
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2,mesh%nz)               :: BC_prescr_u_bk_applied
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2,mesh%nz)               :: BC_prescr_v_bk_applied
     INTEGER                                                      :: viscosity_iteration_i
     LOGICAL                                                      :: has_converged
-    REAL(dp)                                                     :: resid_UV, resid_UV_prev
+    REAL(dp)                                                     :: resid_UV
     REAL(dp)                                                     :: uv_min, uv_max
-    REAL(dp)                                                     :: visc_it_relax_applied
-    REAL(dp)                                                     :: Glens_flow_law_epsilon_sq_0_applied
-    INTEGER                                                      :: nit_diverg_consec
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)                       :: visc_it_relax_applied
+    INTEGER                                                      :: ti
+    REAL(dp)                                                     :: dif
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -138,9 +118,6 @@ CONTAINS
     END IF
 
     ! Handle the optional prescribed u,v boundary conditions
-    ALLOCATE( BC_prescr_mask_bk_applied( mesh%ti1:mesh%ti2,mesh%nz))
-    ALLOCATE( BC_prescr_u_bk_applied(    mesh%ti1:mesh%ti2,mesh%nz))
-    ALLOCATE( BC_prescr_v_bk_applied(    mesh%ti1:mesh%ti2,mesh%nz))
     IF (PRESENT( BC_prescr_mask_bk) .OR. PRESENT( BC_prescr_u_bk) .OR. PRESENT( BC_prescr_v_bk)) THEN
       ! Safety
       IF (.NOT. (PRESENT( BC_prescr_mask_bk) .AND. PRESENT( BC_prescr_u_bk) .AND. PRESENT( BC_prescr_v_bk))) THEN
@@ -164,11 +141,16 @@ CONTAINS
     ! Calculate the driving stress
     CALL calc_driving_stress( mesh, ice, BPA)
 
+    ! Calculate the rheology for the chosen flow law
+    IF (C%choice_flow_law == 'Glen') THEN
+      ! Calculate the flow factors for Glen's flow law
+      CALL calc_ice_rheology_Glen( mesh, ice)
+    ELSE
+      CALL crash('unknown choice_flow_law "' // TRIM( C%choice_flow_law) // '"!')
+    END IF
+
     ! Adaptive relaxation parameter for the viscosity iteration
-    resid_UV                            = 1E9_dp
-    nit_diverg_consec                   = 0
-    visc_it_relax_applied               = C%visc_it_relax
-    Glens_flow_law_epsilon_sq_0_applied = C%Glens_flow_law_epsilon_sq_0
+    visc_it_relax_applied = C%visc_it_relax
 
     ! The viscosity iteration
     viscosity_iteration_i = 0
@@ -180,7 +162,7 @@ CONTAINS
       CALL calc_strain_rates( mesh, BPA)
 
       ! Calculate the effective viscosity for the current velocity solution
-      CALL calc_effective_viscosity( mesh, ice, BPA, Glens_flow_law_epsilon_sq_0_applied)
+      CALL calc_effective_viscosity( mesh, ice, BPA)
 
       ! Calculate the basal friction coefficient betab for the current velocity solution
       CALL calc_applied_basal_friction_coefficient( mesh, ice, BPA)
@@ -195,34 +177,25 @@ CONTAINS
       CALL relax_viscosity_iterations( mesh, BPA, visc_it_relax_applied)
 
       ! Calculate the L2-norm of the two consecutive velocity solutions
-      resid_UV_prev = resid_UV
       CALL calc_visc_iter_UV_resid( mesh, BPA, resid_UV)
 
-      ! If the viscosity iteration diverges, lower the relaxation parameter
-      IF (resid_UV > resid_UV_prev) THEN
-        nit_diverg_consec = nit_diverg_consec + 1
-      ELSE
-        nit_diverg_consec = 0
-      END IF
-      IF (nit_diverg_consec > 2) THEN
-        nit_diverg_consec = 0
-        visc_it_relax_applied               = visc_it_relax_applied               * 0.9_dp
-        Glens_flow_law_epsilon_sq_0_applied = Glens_flow_law_epsilon_sq_0_applied * 1.2_dp
-      END IF
-      IF (visc_it_relax_applied <= 0.05_dp .OR. Glens_flow_law_epsilon_sq_0_applied >= 1E-5_dp) THEN
-        IF (visc_it_relax_applied < 0.05_dp) THEN
-          CALL crash('viscosity iteration still diverges even with very low relaxation factor!')
-        ELSEIF (Glens_flow_law_epsilon_sq_0_applied > 1E-5_dp) THEN
-          CALL crash('viscosity iteration still diverges even with very high effective strain rate regularisation!')
-        END IF
+      ! Check for very fast changes; limit relaxation factor where necessary
+      IF (viscosity_iteration_i > 4) THEN
+        DO ti = mesh%ti1, mesh%ti2
+          dif = ABS( 1._dp - (BPA%u_bk( ti,1) + 1E-2_dp) / (BPA%u_bk_prev( ti,1) +  1E-2_dp)) + &
+                ABS( 1._dp - (BPA%v_bk( ti,1) + 1E-2_dp) / (BPA%v_bk_prev( ti,1) +  1E-2_dp))
+          IF (dif > 0.5_dp) THEN
+            visc_it_relax_applied( ti) = MAX( 0.001_dp, visc_it_relax_applied( ti) * 0.9_dp)
+          END IF
+        END DO
       END IF
 
       ! DENK DROM
-      uv_min = MINVAL( BPA%u_bk)
-      uv_max = MAXVAL( BPA%u_bk)
+      uv_min = MIN( MINVAL( BPA%u_bk), MINVAL( BPA%v_bk))
+      uv_max = MAX( MAXVAL( BPA%u_bk), MAXVAL( BPA%v_bk))
       CALL MPI_ALLREDUCE( MPI_IN_PLACE, uv_min, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
       CALL MPI_ALLREDUCE( MPI_IN_PLACE, uv_max, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
-!      IF (par%master) WRITE(0,*) '    BPA - viscosity iteration ', viscosity_iteration_i, ', u = [', uv_min, ' - ', uv_max, '], resid = ', resid_UV
+      IF (par%master) WRITE(0,*) '    BPA - viscosity iteration ', viscosity_iteration_i, ', u = [', uv_min, ' - ', uv_max, '], resid = ', resid_UV
 
       ! If the viscosity iteration has converged, or has reached the maximum allowed number of iterations, stop it.
       has_converged = .FALSE.
@@ -238,10 +211,10 @@ CONTAINS
 
     END DO viscosity_iteration
 
-    ! Clean up after yourself
-    DEALLOCATE( BC_prescr_mask_bk_applied)
-    DEALLOCATE( BC_prescr_u_bk_applied   )
-    DEALLOCATE( BC_prescr_v_bk_applied   )
+    ! DENK DROM
+    CALL save_variable_as_netcdf_dp_2D( BPA%u_bk, 'u_bk')
+    CALL save_variable_as_netcdf_dp_2D( BPA%v_bk, 'v_bk')
+    CALL crash('whoopsiedaisy')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1170,7 +1143,7 @@ CONTAINS
              cv_d2vdy2  * single_row_d2dy2_val(  n) + &
              cv_d2vdx2  * single_row_d2dx2_val(  n)
         IF (tj == ti .AND. kk == k  ) Av = Av + cv_vk
-        IF (tj == ti .AND. kk == k+1) Av = Av + cv_vkm1
+        IF (tj == ti .AND. kk == k-1) Av = Av + cv_vkm1
 
         Au = cv_dudx    * single_row_ddx_val(    n) + &
              cv_dudy    * single_row_ddy_val(    n) + &
@@ -1775,28 +1748,59 @@ CONTAINS
     IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)              :: mesh
-    TYPE(type_ice_model),                INTENT(IN)              :: ice
-    TYPE(type_ice_velocity_solver_BPA),  INTENT(INOUT)           :: BPA
+    TYPE(type_mesh),                        INTENT(IN)              :: mesh
+    TYPE(type_ice_model),                   INTENT(IN)              :: ice
+    TYPE(type_ice_velocity_solver_BPA),     INTENT(INOUT)           :: BPA
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_driving_stress'
-    INTEGER                                                      :: ti
+    CHARACTER(LEN=256), PARAMETER                                   :: routine_name = 'calc_driving_stress'
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)                          :: Hi_b
+    INTEGER                                                         :: ti
+    REAL(dp)                                                        :: max_slope
+    LOGICAL,  DIMENSION(mesh%nV)                                    :: mask_icefree_land_tot, mask_icefree_ocean_tot
+    LOGICAL                                                         :: has_ice, has_icefree
+    INTEGER                                                         :: n,vi
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Calculate dh/dx, dh/dy, db/dx, db/dy on the b-grid
+    CALL map_a_b_2D( mesh, ice%Hi , Hi_b       )
     CALL ddx_a_b_2D( mesh, ice%Hs , BPA%dh_dx_b)
     CALL ddy_a_b_2D( mesh, ice%Hs , BPA%dh_dy_b)
     CALL ddx_a_b_2D( mesh, ice%Hib, BPA%db_dx_b)
     CALL ddy_a_b_2D( mesh, ice%Hib, BPA%db_dy_b)
 
-    ! Calculate the driving stress
+    ! Limit slopes for thin ice
     DO ti = mesh%ti1, mesh%ti2
-      BPA%tau_dx_b( ti) = -ice_density * grav * BPA%dh_dx_b( ti)
-      BPA%tau_dy_b( ti) = -ice_density * grav * BPA%dh_dy_b( ti)
+      max_slope = 0.02_dp * (MIN( 200._dp, Hi_b( ti)) / 200._dp)
+      BPA%dh_dx_b( ti) = MAX( -max_slope, MIN( max_slope, BPA%dh_dx_b( ti) ))
+      BPA%dh_dy_b( ti) = MAX( -max_slope, MIN( max_slope, BPA%dh_dy_b( ti) ))
     END DO
+
+    ! Kill slopes on front triangles
+    CALL gather_to_all_logical_1D( ice%mask_icefree_land , mask_icefree_land_tot )
+    CALL gather_to_all_logical_1D( ice%mask_icefree_ocean, mask_icefree_ocean_tot)
+    DO ti = mesh%ti1, mesh%ti2
+      has_ice     = .FALSE.
+      has_icefree = .FALSE.
+      DO n = 1, 3
+        vi = mesh%Tri( ti,n)
+        IF (mask_icefree_land_tot( vi) .OR. mask_icefree_ocean_tot( vi)) THEN
+          has_icefree = .TRUE.
+        ELSE
+          has_ice = .TRUE.
+        END IF
+      END DO
+      IF (has_ice .AND. has_icefree) THEN
+        BPA%dh_dx_b( ti) = 0._dp
+        BPA%dh_dy_b( ti) = 0._dp
+      END IF
+    END DO
+
+    ! Calculate the driving stress
+    BPA%tau_dx_b = -ice_density * grav * BPA%dh_dx_b
+    BPA%tau_dy_b = -ice_density * grav * BPA%dh_dy_b
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -1853,7 +1857,7 @@ CONTAINS
 
   END SUBROUTINE calc_strain_rates
 
-  SUBROUTINE calc_effective_viscosity( mesh, ice, BPA, Glens_flow_law_epsilon_sq_0_applied)
+  SUBROUTINE calc_effective_viscosity( mesh, ice, BPA)
     ! Calculate the effective viscosity eta, the product term N = eta*H, and the gradients of N
     !
     ! The effective viscosity eta is calculated separately on both the ak-grid (vertices, regular vertical)
@@ -1865,27 +1869,20 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)              :: mesh
-    TYPE(type_ice_model),                INTENT(INOUT)           :: ice
+    TYPE(type_ice_model),                INTENT(IN)              :: ice
     TYPE(type_ice_velocity_solver_BPA),  INTENT(INOUT)           :: BPA
-    REAL(dp),                            INTENT(IN)              :: Glens_flow_law_epsilon_sq_0_applied
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_effective_viscosity'
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE                      ::  A_flow_bks
-    INTEGER                                                      :: vi,ti,k,ks
-    REAL(dp)                                                     :: A_min, eta_max
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE                      :: eta_bk_from_ak, eta_bk_from_bks
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2, mesh%nz-1)            ::  A_flow_bks
+    INTEGER                                                      :: vi,ti,k,ks,n
+    REAL(dp), PARAMETER                                          :: eta_max = 5E9_dp
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2, mesh%nz  )            :: eta_bk_from_ak, eta_bk_from_bks
     REAL(dp)                                                     :: uabs_base, uabs_surf, R_shear
+    LOGICAL,  DIMENSION(mesh%nV)                                 :: mask_icefree_land_tot, mask_icefree_ocean_tot
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! Calculate maximum allowed effective viscosity, for stability
-    A_min = 1E-18_dp
-    eta_max = 0.5_dp * A_min**(-1._dp / C%Glens_flow_law_exponent) * (Glens_flow_law_epsilon_sq_0_applied)**((1._dp - C%Glens_flow_law_exponent)/(2._dp*C%Glens_flow_law_exponent))
-
-    ! Allocate memory
-    ALLOCATE( A_flow_bks( mesh%ti1:mesh%ti2, mesh%nz-1))
 
   ! == Calculate effective viscosity on the ak-grid
 
@@ -1893,13 +1890,10 @@ CONTAINS
     IF (C%choice_flow_law == 'Glen') THEN
       ! Calculate the effective viscosity eta according to Glen's flow law
 
-      ! Calculate flow factors
-      CALL calc_ice_rheology_Glen( mesh, ice)
-
       ! Calculate effective viscosity
       DO vi = mesh%vi1, mesh%vi2
       DO k  = 1, mesh%nz
-        BPA%eta_ak( vi,k) = calc_effective_viscosity_Glen_3D_uv_only( Glens_flow_law_epsilon_sq_0_applied, &
+        BPA%eta_ak( vi,k) = calc_effective_viscosity_Glen_3D_uv_only( C%Glens_flow_law_epsilon_sq_0, &
           BPA%du_dx_ak( vi,k), BPA%du_dy_ak( vi,k), BPA%du_dz_ak( vi,k), &
           BPA%dv_dx_ak( vi,k), BPA%dv_dy_ak( vi,k), BPA%dv_dz_ak( vi,k), ice%A_flow( vi,k))
       END DO
@@ -1909,8 +1903,13 @@ CONTAINS
       CALL crash('unknown choice_flow_law "' // TRIM( C%choice_flow_law) // '"!')
     END IF
 
-    ! Safety
+    ! Limit effective viscosity to prescribed limits
     BPA%eta_ak = MIN( MAX( BPA%eta_ak, C%visc_eff_min), eta_max)
+
+    ! Set a uniform (low) effective viscosity for ice-free triangles
+    DO vi = mesh%vi1, mesh%vi2
+      IF (ice%Hi( vi) < 0.1_dp) BPA%eta_ak( vi,:) = eta_max
+    END DO
 
   ! == Calculate effective viscosity on the bks-grid
 
@@ -1934,8 +1933,10 @@ CONTAINS
       CALL crash('unknown choice_flow_law "' // TRIM( C%choice_flow_law) // '"!')
     END IF
 
-    ! Safety
+    ! Limit effective viscosity to prescribed limits
     BPA%eta_bks = MIN( MAX( BPA%eta_bks, C%visc_eff_min), eta_max)
+
+  ! == Calculate gradients of the effective viscosity
 
     ! Calculate the horizontal gradients of the effective viscosity from its value on the ak-grid
     CALL calc_3D_gradient_ak_bk(  mesh, mesh%M_ddx_ak_bk , BPA%eta_ak , BPA%deta_dx_bk)
@@ -1944,11 +1945,21 @@ CONTAINS
     ! Calculate the vertical gradients of the effective viscosity from its value on the bks-grid
     CALL calc_3D_gradient_bks_bk( mesh, mesh%M_ddz_bks_bk, BPA%eta_bks, BPA%deta_dz_bk)
 
+    ! Set gradients of the effective viscosity over ice-free areas to zero
+    CALL gather_to_all_logical_1D( ice%mask_icefree_land , mask_icefree_land_tot )
+    CALL gather_to_all_logical_1D( ice%mask_icefree_ocean, mask_icefree_ocean_tot)
+    DO ti = mesh%ti1, mesh%ti2
+    DO n = 1, 3
+      vi = mesh%Tri( ti,n)
+      IF (mask_icefree_land_tot( vi) .OR. mask_icefree_ocean_tot( vi)) THEN
+        BPA%deta_dx_bk( ti,:) = 0._dp
+        BPA%deta_dy_bk( ti,:) = 0._dp
+        BPA%deta_dz_bk( ti,:) = 0._dp
+      END IF
+    END DO
+    END DO
+
     ! Map the effective viscosity from the ak- and bks-grids to the bk-grid
-
-    ALLOCATE( eta_bk_from_ak(  mesh%ti1:mesh%ti2,mesh%nz))
-    ALLOCATE( eta_bk_from_bks( mesh%ti1:mesh%ti2,mesh%nz))
-
     CALL map_a_b_3D( mesh, BPA%eta_ak, eta_bk_from_ak)
     CALL calc_3D_gradient_bks_bk( mesh, mesh%M_map_bks_bk, BPA%eta_bks, eta_bk_from_bks)
 
@@ -1975,11 +1986,6 @@ CONTAINS
 
     END DO ! DO ti = mesh%ti1, mesh%ti2
 
-    ! Clean up after yourself
-    DEALLOCATE( A_flow_bks)
-    DEALLOCATE( eta_bk_from_ak)
-    DEALLOCATE( eta_bk_from_bks)
-
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
@@ -2001,14 +2007,10 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_applied_basal_friction_coefficient'
     INTEGER                                                      :: ti
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE                      :: u_base_b, v_base_b
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2)                       :: u_base_b, v_base_b
 
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! Allocate memory
-    ALLOCATE( u_base_b( mesh%ti1:mesh%ti2))
-    ALLOCATE( v_base_b( mesh%ti1:mesh%ti2))
 
     ! Copy basal velocities from 3-D fields
     u_base_b = BPA%u_bk( :,mesh%nz)
@@ -2024,7 +2026,7 @@ CONTAINS
     ! Apply the sub-grid grounded fraction, and limit the friction coefficient to improve stability
     IF (C%do_GL_subgrid_friction) THEN
       DO ti = mesh%ti1, mesh%ti2
-        BPA%basal_friction_coefficient_b( ti) = BPA%basal_friction_coefficient_b( ti) * ice%fraction_gr_b( ti)**C%subgrid_friction_exponent_on_B_grid
+        BPA%basal_friction_coefficient_b( ti) = MAX( C%slid_beta_min, BPA%basal_friction_coefficient_b( ti) * ice%fraction_gr_b( ti)**C%subgrid_friction_exponent_on_B_grid)
       END DO
     END IF
 
@@ -2043,7 +2045,7 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                     INTENT(IN)              :: mesh
     TYPE(type_ice_velocity_solver_BPA),  INTENT(INOUT)           :: BPA
-    REAL(dp),                            INTENT(IN)              :: visc_it_relax
+    REAL(dp), DIMENSION(mesh%ti1:mesh%ti2), INTENT(IN)           :: visc_it_relax
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'relax_viscosity_iterations'
@@ -2053,8 +2055,8 @@ CONTAINS
     CALL init_routine( routine_name)
 
     DO ti = mesh%ti1, mesh%ti2
-      BPA%u_bk( ti,:) = (visc_it_relax * BPA%u_bk( ti,:)) + ((1._dp - visc_it_relax) * BPA%u_bk_prev( ti,:))
-      BPA%v_bk( ti,:) = (visc_it_relax * BPA%v_bk( ti,:)) + ((1._dp - visc_it_relax) * BPA%v_bk_prev( ti,:))
+      BPA%u_bk( ti,:) = (visc_it_relax( ti) * BPA%u_bk( ti,:)) + ((1._dp - visc_it_relax( ti)) * BPA%u_bk_prev( ti,:))
+      BPA%v_bk( ti,:) = (visc_it_relax( ti) * BPA%v_bk( ti,:)) + ((1._dp - visc_it_relax( ti)) * BPA%v_bk_prev( ti,:))
     END DO
 
     ! Finalise routine path
@@ -2074,7 +2076,6 @@ CONTAINS
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'calc_visc_iter_UV_resid'
-    INTEGER                                                      :: ierr
     INTEGER                                                      :: ti,k
     REAL(dp)                                                     :: res1, res2
 
@@ -2146,64 +2147,6 @@ CONTAINS
   END SUBROUTINE apply_velocity_limits
 
 ! == Initialisation
-
-  SUBROUTINE initialise_BPA_velocities_from_file( mesh, BPA, region_name)
-    ! Initialise the velocities for the BPA solver from an external NetCDF file
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)    :: mesh
-    TYPE(type_ice_velocity_solver_BPA),  INTENT(INOUT) :: BPA
-    CHARACTER(LEN=3),                    INTENT(IN)    :: region_name
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'initialise_BPA_velocities_from_file'
-    REAL(dp)                                           :: dummy1
-    CHARACTER(LEN=256)                                 :: filename
-    REAL(dp)                                           :: timeframe
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! To prevent compiler warnings
-    dummy1 = mesh%xmin
-
-    ! Determine the filename and timeframe to read for this model region
-    IF     (region_name == 'NAM') THEN
-      filename  = C%filename_initial_velocity_NAM
-      timeframe = C%timeframe_initial_velocity_NAM
-    ELSEIF (region_name == 'EAS') THEN
-      filename  = C%filename_initial_velocity_EAS
-      timeframe = C%timeframe_initial_velocity_EAS
-    ELSEIF (region_name == 'GRL') THEN
-      filename  = C%filename_initial_velocity_GRL
-      timeframe = C%timeframe_initial_velocity_GRL
-    ELSEIF (region_name == 'ANT') THEN
-      filename  = C%filename_initial_velocity_ANT
-      timeframe = C%timeframe_initial_velocity_ANT
-    ELSE
-      CALL crash('unknown model region "' // region_name // '"!')
-    END IF
-
-    ! Write to terminal
-    IF (par%master) WRITE(0,*) '   Initialising BPA velocities from file "' // colour_string( TRIM( filename),'light blue') // '"...'
-
-    ! Read velocities from the file
-    IF (timeframe == 1E9_dp) THEN
-      ! Assume the file has no time dimension
-      CALL read_field_from_mesh_file_3D_b( filename, 'u_bk', BPA%u_bk)
-      CALL read_field_from_mesh_file_3D_b( filename, 'v_bk', BPA%v_bk)
-    ELSE
-      ! Read specified timeframe
-      CALL read_field_from_mesh_file_3D_b( filename, 'u_bk', BPA%u_bk, time_to_read = timeframe)
-      CALL read_field_from_mesh_file_3D_b( filename, 'v_bk', BPA%v_bk, time_to_read = timeframe)
-    END IF
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE initialise_BPA_velocities_from_file
 
   SUBROUTINE allocate_BPA_solver( mesh, BPA)
     ! Allocate memory the BPA solver
@@ -2286,108 +2229,5 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE allocate_BPA_solver
-
-! == Restart NetCDF files
-
-  SUBROUTINE write_to_restart_file_BPA( mesh, BPA, time)
-    ! Write to the restart NetCDF file for the BPA solver
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)              :: mesh
-    TYPE(type_ice_velocity_solver_BPA),  INTENT(IN)              :: BPA
-    REAL(dp),                            INTENT(IN)              :: time
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'write_to_restart_file_BPA'
-    INTEGER                                                      :: ncid
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! If no NetCDF output should be created, do nothing
-    IF (.NOT. C%do_create_netcdf_output) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Print to terminal
-    IF (par%master) WRITE(0,'(A)') '   Writing to BPA restart file "' // &
-      colour_string( TRIM( BPA%restart_filename), 'light blue') // '"...'
-
-    ! Open the NetCDF file
-    CALL open_existing_netcdf_file_for_writing( BPA%restart_filename, ncid)
-
-    ! Write the time to the file
-    CALL write_time_to_file( BPA%restart_filename, ncid, time)
-
-    ! Write the velocity fields to the file
-    CALL write_to_field_multopt_mesh_dp_3D_b( mesh, BPA%restart_filename, ncid, 'u_bk', BPA%u_bk)
-    CALL write_to_field_multopt_mesh_dp_3D_b( mesh, BPA%restart_filename, ncid, 'v_bk', BPA%v_bk)
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE write_to_restart_file_BPA
-
-  SUBROUTINE create_restart_file_BPA( mesh, BPA)
-    ! Create a restart NetCDF file for the BPA solver
-    ! Includes generation of the procedural filename (e.g. "restart_BPA_00001.nc")
-
-    IMPLICIT NONE
-
-    ! In/output variables:
-    TYPE(type_mesh),                     INTENT(IN)              :: mesh
-    TYPE(type_ice_velocity_solver_BPA),  INTENT(INOUT)           :: BPA
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                                :: routine_name = 'create_restart_file_BPA'
-    CHARACTER(LEN=256)                                           :: filename_base
-    INTEGER                                                      :: ncid
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! If no NetCDF output should be created, do nothing
-    IF (.NOT. C%do_create_netcdf_output) THEN
-      CALL finalise_routine( routine_name)
-      RETURN
-    END IF
-
-    ! Set the filename
-    filename_base = TRIM( C%output_dir) // 'restart_ice_velocity_BPA'
-    CALL generate_filename_XXXXXdotnc( filename_base, BPA%restart_filename)
-
-    ! Print to terminal
-    IF (par%master) WRITE(0,'(A)') '   Creating BPA restart file "' // &
-      colour_string( TRIM( BPA%restart_filename), 'light blue') // '"...'
-
-    ! Create the NetCDF file
-    CALL create_new_netcdf_file_for_writing( BPA%restart_filename, ncid)
-
-    ! Set up the mesh in the file
-    CALL setup_mesh_in_netcdf_file( BPA%restart_filename, ncid, mesh)
-
-    ! Add a time dimension to the file
-    CALL add_time_dimension_to_file( BPA%restart_filename, ncid)
-
-    ! Add a zeta dimension to the file
-    CALL add_zeta_dimension_to_file( BPA%restart_filename, ncid, mesh%zeta)
-
-    ! Add the velocity fields to the file
-    CALL add_field_mesh_dp_3D_b( BPA%restart_filename, ncid, 'u_bk', long_name = '3-D horizontal ice velocity in the x-direction', units = 'm/yr')
-    CALL add_field_mesh_dp_3D_b( BPA%restart_filename, ncid, 'v_bk', long_name = '3-D horizontal ice velocity in the y-direction', units = 'm/yr')
-
-    ! Close the file
-    CALL close_netcdf_file( ncid)
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE create_restart_file_BPA
 
 END MODULE ice_velocity_BPA

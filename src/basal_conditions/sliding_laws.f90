@@ -448,9 +448,15 @@ CONTAINS
     IF     (C%choice_idealised_sliding_law == 'ISMIP-HOM_C') THEN
       ! ISMIP-HOM experiment C
       CALL calc_sliding_law_idealised_ISMIP_HOM_C( mesh, ice)
+    ELSEIF (C%choice_idealised_sliding_law == 'ISMIP-HOM_C_trans') THEN
+      ! ISMIP-HOM experiment C
+      CALL calc_sliding_law_idealised_ISMIP_HOM_C_trans( mesh, ice)
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP-HOM_D') THEN
       ! ISMIP-HOM experiment D
       CALL calc_sliding_law_idealised_ISMIP_HOM_D( mesh, ice)
+    ELSEIF (C%choice_idealised_sliding_law == 'ISMIP-HOM_D_trans') THEN
+      ! ISMIP-HOM experiment D
+      CALL calc_sliding_law_idealised_ISMIP_HOM_D_trans( mesh, ice)
     ELSEIF (C%choice_idealised_sliding_law == 'ISMIP-HOM_E') THEN
       ! ISMIP-HOM experiment E
       CALL crash('the Glacier Arolla experiment is not implemented in UFEMISM!')
@@ -496,6 +502,38 @@ CONTAINS
 
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C
 
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C_trans( mesh, ice)
+    ! Sliding laws for some idealised experiments
+    !
+    ! ISMIP-HOM experiment C
+    !
+    ! Transposed: [x,y] -> [y,x]
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_C_trans'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: x,y
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO vi = mesh%vi1, mesh%vi2
+      x = mesh%V( vi,2)
+      y = mesh%V( vi,1)
+      ice%basal_friction_coefficient( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%refgeo_idealised_ISMIP_HOM_L) * SIN( 2._dp * pi * y / C%refgeo_idealised_ISMIP_HOM_L)
+    END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_C_trans
+
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D( mesh, ice)
     ! Sliding laws for some idealised experiments
     !
@@ -524,6 +562,37 @@ CONTAINS
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D
+
+  SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D_trans( mesh, ice)
+    ! Sliding laws for some idealised experiments
+    !
+    ! ISMIP-HOM experiment D
+    !
+    ! Transposed: [x,y] -> [y,x]
+
+    IMPLICIT NONE
+
+    ! In- and output variables:
+    TYPE(type_mesh),                     INTENT(IN)    :: mesh
+    TYPE(type_ice_model),                INTENT(INOUT) :: ice
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'calc_sliding_law_idealised_ISMIP_HOM_D_trans'
+    INTEGER                                            :: vi
+    REAL(dp)                                           :: x
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    DO vi = mesh%vi1, mesh%vi2
+      x = mesh%V( vi,2)
+      ice%basal_friction_coefficient( vi) = 1000._dp + 1000._dp * SIN( 2._dp * pi * x / C%refgeo_idealised_ISMIP_HOM_L)
+    END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_D_trans
 
   SUBROUTINE calc_sliding_law_idealised_ISMIP_HOM_F( mesh, ice)
     ! Sliding laws for some idealised experiments
