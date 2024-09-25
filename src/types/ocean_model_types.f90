@@ -22,6 +22,10 @@ MODULE ocean_model_types
     REAL(dp) :: t0      ! Start time for interpolation
     REAL(dp) :: t1      ! End time for interpolation
 
+    ! Timeframes for interpolation
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe0  ! Ocean state at t0
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe1  ! Ocean state at t1
+
   end type type_ocean_matrix
 
   TYPE type_ocean_model
