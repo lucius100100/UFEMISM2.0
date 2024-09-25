@@ -93,7 +93,7 @@ CONTAINS
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL run_ocean_model_realistic( mesh, ice, ocean)
     ELSEIF (choice_ocean_model == 'matrix') THEN
-      CALL run_ocean_model_matrix( mesh, ice, ocean)
+      CALL run_ocean_model_matrix( mesh, ice, ocean, time, region_name)
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF

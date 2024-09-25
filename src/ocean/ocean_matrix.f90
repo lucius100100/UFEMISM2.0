@@ -40,6 +40,7 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_ocean_model_matrix'
     real(dp)                                              :: wt0, wt1
+    INTEGER                                               :: i,j
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -143,7 +144,6 @@ MODULE ocean_matrix
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
-    ! FIX time now as input, but should be automatically read
     REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
@@ -157,6 +157,14 @@ MODULE ocean_matrix
     ! Set time for the two snapshots
     ocean%matrix%t0 = REAL(year0, dp)
     ocean%matrix%t1 = REAL(year1, dp)
+
+    ! Allocate memory for timeframe0 and timeframe1
+    IF (.NOT. ALLOCATED(ocean%matrix%timeframe0)) THEN
+      ALLOCATE(ocean%matrix%timeframe0)
+    END IF
+    IF (.NOT. ALLOCATED(ocean%matrix%timeframe1)) THEN
+        ALLOCATE(ocean%matrix%timeframe1)
+    END IF
 
     ! Construct filenames for the two ocean snapshots
     filename0 = TRIM(C%filename_ocean_matrix_base) // TRIM(region_name) // '_' // TRIM(ADJUSTL(CHAR(year0))) // '.nc'
