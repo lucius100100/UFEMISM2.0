@@ -184,6 +184,7 @@ UFEMISM_source = \
   climate/climate_main.f90 \
   \
   ocean/ocean_utilities.f90 \
+  ocean/ocean_matrix.f90 \
   ocean/ocean_realistic.f90 \
   ocean/ocean_main.f90 \
   \

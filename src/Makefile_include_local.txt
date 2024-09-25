@@ -1,40 +1,35 @@
-# Depends on this file
-$(OBJ_PATH)/%.o : %.f90 Makefile_include_local.txt
-
-# Compiler names:
+# Compiler:
   F90 = mpifort
 
-# Setting NetCDF, NetCDF-Fortran, and PETSc library info:
-  NCINC     = $(shell nc-config --cflags)
-  NCLIB     = $(shell nc-config --libs)
-  NFINC     = $(shell nf-config --fflags)
-  NFLIB     = $(shell nf-config --flibs)
-  PETSCINC  = $(shell pkg-config petsc --cflags)
-  PETSCLIB  = $(shell pkg-config petsc --libs)
-  LAPACKLIB = $(shell pkg-config lapack --libs)
+# Path to NetCDF:
+  NETCDF_DIR = /home/linuxbrew/.linuxbrew/Cellar/netcdf/4.9.2_1
+  NETCDFF_DIR = /home/linuxbrew/.linuxbrew/Cellar/netcdf-fortran/4.6.1
+# Path to PETSc:
+  PETSC_DIR  = /home/linuxbrew/.linuxbrew/Cellar/petsc/3.20.5_1
+# Path to LAPACK:
+  LAPACK_DIR = /home/linuxbrew/.linuxbrew/Cellar/lapack/3.12.0
 
-# Basic flags:
-  COMPILER_FLAGS_BASIC    = -O3 -Wall -ffree-line-length-none -cpp \
-                            -Werror=implicit-interface -fimplicit-none -g -march=native
+# Compile with SELEN: anything else than yes (no quotes) will skip all
+# SELEN-related stuff both in the Makefile and in the model code
+  DO_SELEN   = no
 
-# Check flags:
-# check=all : bounds checking etc ...
-# backtrace : print backtrace on checking fail
-# Og        : compile only with optimizations compatible with gdb enabled
-# init-real=nan : initialize every real allocation to nan, follow the nans to find uninitialized values
-# init-integer=-42 : same, but for integers
-# init-character=33 : same, but for characters, 33 is equal to "!" (so look for those)
-  COMPILER_FLAGS_CHECK    = -fcheck=all -fbacktrace -Og \
-                            -finit-real=nan -finit-integer=-42 -finit-character=33 \
-                            -ffpe-trap=zero,overflow#,invalid
+# Compiler flags:
+  COMPILER_FLAGS_BASIC   = -O3 -ffree-line-length-none -cpp
+  COMPILER_FLAGS_CHECK   = -fbounds-check -fcheck-array-temporaries -fimplicit-none
 
-# Final set of compiler flags:
-  F90FLAGS                = ${COMPILER_FLAGS_BASIC} \
-                            ${COMPILER_FLAGS_CHECK} \
-                            ${NCINC} ${NFINC} ${PETSCINC}
+  ifeq ($(DO_SELEN),yes)
+    COMPILER_FLAGS_SELEN = -DDO_SELEN
+  endif
+
+  F90FLAGS               = ${COMPILER_FLAGS_BASIC} ${COMPILER_FLAGS_CHECK} ${COMPILER_FLAGS_SELEN} \
+                           -I$(NETCDF_DIR)/include -I$(NETCDFF_DIR)/include -I$(PETSC_DIR)/include -I$(LAPACK_DIR)/include
 
 # Linking flags of libaries:
+# <<<<<<< Updated upstream
 # -ld_classic : Force Command Line Tools v15 on Mac to behave like v14, which supports -commons linker option
 #               Otherwise the error "ld: unknown options: -commons" is triggered after updating to CLTv15
 #               This might get patched in future versions of mpifort, so test without it later
-  LDFLAGS                 = ${PETSCLIB} ${NCLIB} ${NFLIB} ${LAPACKLIB} -g # -ld_classic
+#  LDFLAGS                 = ${PETSCLIB} ${NCLIB} ${NFLIB} ${LAPACKLIB} -g # -ld_classic
+# =======
+  LDFLAGS                = -L${NETCDF_DIR}/lib -L${NETCDFF_DIR}/lib -lnetcdff -lnetcdf -L${PETSC_DIR}/lib -lpetsc -L${LAPACK_DIR}/lib -llapack
+# >>>>>>> Stashed changes
