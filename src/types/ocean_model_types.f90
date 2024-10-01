@@ -21,10 +21,28 @@ MODULE ocean_model_types
     ! Time fields for interpolation
     REAL(dp) :: t0      ! Start time for interpolation
     REAL(dp) :: t1      ! End time for interpolation
+    REAL(dp) :: t2      ! In case of more than two snapshots
+    REAL(dp) :: t3      
+    REAL(dp) :: t4      
+    REAL(dp) :: t5      
+    REAL(dp) :: t6      
+    REAL(dp) :: t7      
+    REAL(dp) :: t8      
+    REAL(dp) :: t9      
+    REAL(dp) :: t10      
 
     ! Timeframes for interpolation
     TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe0  ! Ocean state at t0
     TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe1  ! Ocean state at t1
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe2  ! Ocean state at t2
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe3  ! Ocean state at t3
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe4  ! Ocean state at t4
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe5  ! Ocean state at t5
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe6  ! Ocean state at t6
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe7  ! Ocean state at t7
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe8  ! Ocean state at t8
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe9  ! Ocean state at t9
+    TYPE(type_ocean_matrix), ALLOCATABLE :: timeframe10  ! Ocean state at t10
 
   end type type_ocean_matrix
 

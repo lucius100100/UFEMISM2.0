@@ -56,7 +56,7 @@ MODULE ocean_matrix
 
     ! Don't exceed amount of supported number of timeframes
     IF (num_timeframes > MAX_TIMEFRAMES) THEN
-      CALL crash('Number of timeframes (' // TRIM(ADJUSTL(WRITE(num_timeframes))) // ') exceeds the coded limit of ' // TRIM(ADJUSTL(WRITE(MAX_TIMEFRAMES))) // '.')
+      CALL crash('Number of timeframes exceeds the coded limit.')
     END IF
 
     ! Finalise routine path
@@ -146,8 +146,9 @@ MODULE ocean_matrix
     REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'update_ocean_matrix_timeframes'
     INTEGER                                               :: year0, year1
-    CHARACTER(LEN=256)                                    :: filename0, filename1
+    CHARACTER(LEN=256)                                    :: filename1, filename2
     
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -167,44 +168,17 @@ MODULE ocean_matrix
     IF (.NOT. ALLOCATED(ocean%matrix%timeframe1)) THEN
         ALLOCATE(ocean%matrix%timeframe1)
     END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe2)) THEN
-        ALLOCATE(ocean%matrix%timeframe2)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe3)) THEN
-        ALLOCATE(ocean%matrix%timeframe3)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe4)) THEN
-        ALLOCATE(ocean%matrix%timeframe4)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe5)) THEN
-        ALLOCATE(ocean%matrix%timeframe5)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe6)) THEN
-        ALLOCATE(ocean%matrix%timeframe6)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe7)) THEN
-        ALLOCATE(ocean%matrix%timeframe7)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe8)) THEN
-        ALLOCATE(ocean%matrix%timeframe8)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe9)) THEN
-        ALLOCATE(ocean%matrix%timeframe9)
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe10)) THEN
-        ALLOCATE(ocean%matrix%timeframe10)
-    END IF
     ! Can always add more if needed, for now capped at 10 timeframes
 
     ! Construct filenames for the two ocean snapshots
-    filename0 = TRIM(C%filename_ocean_matrix_base) // TRIM(region_name) // '_' // TRIM(ADJUSTL(CHAR(year0))) // '.nc'
-    filename1 = TRIM(C%filename_ocean_matrix_base) // TRIM(region_name) // '_' // TRIM(ADJUSTL(CHAR(year1))) // '.nc'
+    filename1 = TRIM(C%filename_ocean_matrix_base1) // TRIM(region_name) // '_' // TRIM(ADJUSTL(CHAR(year0))) // '.nc'
+    filename2 = TRIM(C%filename_ocean_matrix_base2) // TRIM(region_name) // '_' // TRIM(ADJUSTL(CHAR(year1))) // '.nc'
 
     ! Read the ocean snapshots
-    CALL read_field_from_file_3D_ocean(filename0, field_name_options_T_ocean, mesh, ocean%matrix%timeframe0%T)
-    CALL read_field_from_file_3D_ocean(filename0, field_name_options_S_ocean, mesh, ocean%matrix%timeframe0%S)
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, ocean%matrix%timeframe1%T)
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_S_ocean, mesh, ocean%matrix%timeframe1%S)
+    CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, ocean%matrix%timeframe0%T)
+    CALL read_field_from_file_3D_ocean(filename1, field_name_options_S_ocean, mesh, ocean%matrix%timeframe0%S)
+    CALL read_field_from_file_3D_ocean(filename2, field_name_options_T_ocean, mesh, ocean%matrix%timeframe1%T)
+    CALL read_field_from_file_3D_ocean(filename2, field_name_options_S_ocean, mesh, ocean%matrix%timeframe1%S)
   
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -224,6 +198,7 @@ MODULE ocean_matrix
     REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'linear_interpolation'
     REAL(dp)                                              :: wt0, wt1
     INTEGER                                               :: i, j
 
@@ -249,9 +224,6 @@ MODULE ocean_matrix
 
   SUBROUTINE polynomial_interpolation(mesh, ocean, time, num_timeframes, times, weights)
     ! Polynomial interpolation (Lagrange)
-    !
-    ! Approach chosen where it is possible to fit up to 10 data points, but in terms of computational
-    ! time it is recommended to select only the lowest (possible) amount of data points relevant. 
 
     IMPLICIT NONE
 
@@ -264,6 +236,7 @@ MODULE ocean_matrix
     REAL(dp), DIMENSION(:),                   INTENT(OUT)   :: weights
 
     ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'polynomial_interpolation'
     INTEGER                                                 :: n, m, i, j, polynomial_order
 
     ! Add routine to path
@@ -376,7 +349,7 @@ MODULE ocean_matrix
 
     ! Check if enough timeframes are available for the selected method
     IF (num_timeframes < required_timeframes) THEN
-        CALL crash('Insufficient timeframes for ' // TRIM(C%choice_ocean_model_matrix) // ' interpolation. Required: ' // TRIM(ADJUSTL(WRITE(required_timeframes))) // ', Available: ' // TRIM(ADJUSTL(WRITE(num_timeframes))))
+        CALL crash('Insufficient timeframes for interpolation method.')
         RETURN
     END IF
 
@@ -418,7 +391,8 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model_matrix'
     CHARACTER(LEN=256)                                    :: filename_ocean_snapshot
-  
+    CHARACTER(LEN=256)                                    :: filename_ocean_matrix_base1, filename_ocean_matrix_base2
+
     ! Add routine to path
     CALL init_routine( routine_name)
   
