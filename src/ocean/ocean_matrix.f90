@@ -247,8 +247,11 @@ MODULE ocean_matrix
 
   END SUBROUTINE linear_interpolation
 
-  SUBROUTINE polynomial_interpolation(mesh, ocean, time, num_timeframes, times, weights, polynomial_order)
+  SUBROUTINE polynomial_interpolation(mesh, ocean, time, num_timeframes, times, weights)
     ! Polynomial interpolation (Lagrange)
+    !
+    ! Approach chosen where it is possible to fit up to 10 data points, but in terms of computational
+    ! time it is recommended to select only the lowest (possible) amount of data points relevant. 
 
     IMPLICIT NONE
 
@@ -259,110 +262,63 @@ MODULE ocean_matrix
     INTEGER,                                  INTENT(IN)    :: num_timeframes
     REAL(dp), DIMENSION(:),                   INTENT(IN)    :: times
     REAL(dp), DIMENSION(:),                   INTENT(OUT)   :: weights
-    INTEGER,                                  INTENT(IN)    :: polynomial_order
 
     ! Local variables:
-    INTEGER                                                 :: n, m, i, j
+    INTEGER                                                 :: n, m, i, j, polynomial_order
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Calculate weights for polynomial interpolation 
-    DO n = 1, polynomial_order + 1
-      weights(n) = 1.0_dp
-      DO m = 1, polynomial_order + 1
-          IF (m /= n) THEN
-              weights(n) = weights(n) * (time - times(m)) / (times(n) - times(m))
-          END IF
-      END DO
+    ! Polynomial order based on the number of timeframes
+    polynomial_order = num_timeframes - 1
+
+    ! Calculate weights for polynomial interpolation
+    DO n = 1, num_timeframes
+        weights(n) = 1.0_dp
+        DO m = 1, num_timeframes
+            IF (m /= n) THEN
+                weights(n) = weights(n) * (time - times(m)) / (times(n) - times(m))
+            END IF
+        END DO
     END DO
 
     ! Apply polynomial interpolation
     DO i = mesh%vi1, mesh%vi2
       DO j = 1, C%nz_ocean
-          ocean%T(i,j) = 0.0_dp
-          ocean%S(i,j) = 0.0_dp
+          ocean%T(i, j) = 0.0_dp
+          ocean%S(i, j) = 0.0_dp
 
-          ! Sum the contributions from each available timeframe 
+          ! Sum the contributions from each available timeframe
           n = 0
           IF (ALLOCATED(ocean%matrix%timeframe0%T)) THEN
               n = n + 1
-              IF (n <= polynomial_order + 1) THEN
-                  ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe0%T(i,j)
-                  ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe0%S(i,j)
+              IF (n <= num_timeframes) THEN
+                  ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe0%T(i, j)
+                  ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe0%S(i, j)
               END IF
           END IF
           IF (ALLOCATED(ocean%matrix%timeframe1%T)) THEN
               n = n + 1
-              IF (n <= polynomial_order + 1) THEN
-                  ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe1%T(i,j)
-                  ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe1%S(i,j)
+              IF (n <= num_timeframes) THEN
+                  ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe1%T(i, j)
+                  ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe1%S(i, j)
               END IF
           END IF
           IF (ALLOCATED(ocean%matrix%timeframe2%T)) THEN
               n = n + 1
-              IF (n <= polynomial_order + 1) THEN
-                  ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe2%T(i,j)
-                  ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe2%S(i,j)
+              IF (n <= num_timeframes) THEN
+                  ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe2%T(i, j)
+                  ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe2%S(i, j)
               END IF
           END IF
           IF (ALLOCATED(ocean%matrix%timeframe3%T)) THEN
             n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe3%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe3%S(i,j)
+            IF (n <= num_timeframes) THEN
+                ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe3%T(i, j)
+                ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe3%S(i, j)
             END IF
           END IF
-          IF (ALLOCATED(ocean%matrix%timeframe4%T)) THEN
-            n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe4%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe4%S(i,j)
-            END IF
-          END IF
-          IF (ALLOCATED(ocean%matrix%timeframe5%T)) THEN
-            n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe5%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe5%S(i,j)
-            END IF
-          END IF
-          IF (ALLOCATED(ocean%matrix%timeframe6%T)) THEN
-            n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe6%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe6%S(i,j)
-            END IF
-          END IF
-          IF (ALLOCATED(ocean%matrix%timeframe7%T)) THEN
-            n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe7%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe7%S(i,j)
-            END IF
-          END IF
-          IF (ALLOCATED(ocean%matrix%timeframe8%T)) THEN
-            n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe8%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe8%S(i,j)
-            END IF
-          END IF
-          IF (ALLOCATED(ocean%matrix%timeframe9%T)) THEN
-            n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe9%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe9%S(i,j)
-            END IF
-          END IF
-          IF (ALLOCATED(ocean%matrix%timeframe10%T)) THEN
-            n = n + 1
-            IF (n <= polynomial_order + 1) THEN
-                ocean%T(i,j) = ocean%T(i,j) + weights(n) * ocean%matrix%timeframe10%T(i,j)
-                ocean%S(i,j) = ocean%S(i,j) + weights(n) * ocean%matrix%timeframe10%S(i,j)
-            END IF
-          END IF
-          ! Capped to 10 timeframes for now
+          ! Limited polynomial order due to computational time
       END DO
     END DO
 
@@ -374,8 +330,7 @@ MODULE ocean_matrix
   SUBROUTINE run_ocean_model_matrix( mesh, ice, ocean, time, region_name)
     ! Calculate the ocean
     !
-    ! Use an interpolating matrix ocean scheme, choice between linear (at least 2 timeframes), 
-    ! polynomial_quadratic (at least 3 timeframes), and polynomial_cubic (at least 4 timeframes)
+    ! Use an interpolating matrix ocean scheme, choice between linear and polynomial
   
     IMPLICIT NONE
   
@@ -412,12 +367,10 @@ MODULE ocean_matrix
     ! Minimum required amount of timeframes for each interpolation method
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
       required_timeframes = 2
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial_quadratic') THEN
-        required_timeframes = 3
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial_cubic') THEN
-        required_timeframes = 4
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial') THEN
+        required_timeframes = 2  ! Minimum required for polynomial interpolation (capped to 4 for now)
     ELSE
-        CALL crash('Not enough timeframes for interpolation method: ' // TRIM(C%choice_ocean_model_matrix))
+        CALL crash('Unknown interpolation method: ' // TRIM(C%choice_ocean_model_matrix))
         RETURN
     END IF
 
@@ -433,14 +386,12 @@ MODULE ocean_matrix
     END IF
 
     ! Perform time interpolation
-    IF (C%choice_ocean_model_matrix == 'linear') THEN
+    IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
       CALL linear_interpolation(mesh, ocean, time)
-    ELSE IF (C%choice_ocean_model_matrix == 'polynomial_quadratic') THEN
-      CALL polynomial_interpolation(mesh, ocean, time, num_timeframes, times, weights, 2)
-    ELSE IF (C%choice_ocean_model_matrix == 'polynomial_cubic') THEN
-      CALL polynomial_interpolation(mesh, ocean, time, num_timeframes, times, weights, 3)
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial') THEN
+        CALL polynomial_interpolation(mesh, ocean, time, num_timeframes, times, weights)
     ELSE
-      CALL crash('unknown choice_ocean_model_matrix "' // TRIM(C%choice_ocean_model_matrix) // '"')
+        CALL crash('Unknown choice_ocean_model_matrix "' // TRIM(C%choice_ocean_model_matrix) // '"')
     END IF
 
     ! Clean up arrays
