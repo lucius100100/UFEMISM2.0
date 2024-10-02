@@ -700,8 +700,8 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT_config           = ''
 
     ! Paths to files containing fields for matrix ocean
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base1                    = ''
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base2                    = ''
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base1_config                    = ''
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base2_config                    = ''
 
   ! == Surface mass balance
   ! =======================
@@ -1622,8 +1622,8 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT
 
     ! Paths to files containing fields for matrix ocean
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base1
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base2                   
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base1                    = ''
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base2                    = ''
 
   ! == Surface mass balance
   ! =======================
@@ -1723,7 +1723,7 @@ MODULE model_configuration
 
     ! "laddie"
     CHARACTER(LEN=256)  :: choice_BMB_laddie_system
-    CHARACTER(LEN=256)  :: filename_BMB_laddie_configname
+    CHARACTER(LEN=256)  :: filename_BMB_laddie
     CHARACTER(LEN=256)  :: filename_BMB_laddie_initial_restart
     CHARACTER(LEN=256)  :: filename_BMB_laddie_initial_output
     CHARACTER(LEN=256)  :: dir_BMB_laddie_model
@@ -2480,6 +2480,8 @@ CONTAINS
       choice_ocean_model_idealised_config                         , &
       choice_ocean_model_realistic_config                         , &
       choice_ocean_model_matrix_config                            , &
+      filename_ocean_matrix_base1_config                          , &
+      filename_ocean_matrix_base2_config                          , &
       filename_ocean_snapshot_NAM_config                          , &
       filename_ocean_snapshot_EAS_config                          , &
       filename_ocean_snapshot_GRL_config                          , &
@@ -3349,14 +3351,15 @@ CONTAINS
     ! Choice of matrix ocean model
     C%choice_ocean_model_matrix                              = choice_ocean_model_matrix_config
 
-    ! Paths to files containing fields for realistic oceans
+    ! Paths to files containing fields for realistic ocean
     C%filename_ocean_snapshot_NAM                            = filename_ocean_snapshot_NAM_config
     C%filename_ocean_snapshot_EAS                            = filename_ocean_snapshot_EAS_config
     C%filename_ocean_snapshot_GRL                            = filename_ocean_snapshot_GRL_config
     C%filename_ocean_snapshot_ANT                            = filename_ocean_snapshot_ANT_config
 
-    C%filename_ocean_matrix_base1                             = ''
-    C%filename_ocean_matrix_base2                             = ''
+    ! Paths to files containing fields for matrix ocean
+    C%filename_ocean_matrix_base1                            = filename_ocean_matrix_base1_config
+    C%filename_ocean_matrix_base2                            = filename_ocean_matrix_base2_config
 
   ! == Surface mass balance
   ! =======================
@@ -3456,7 +3459,7 @@ CONTAINS
 
     ! "laddie"
     C%choice_BMB_laddie_system                               = choice_BMB_laddie_system_config
-    C%filename_BMB_laddie_configname                         = filename_BMB_laddie_configname_config
+    C%filename_BMB_laddie                                    = filename_BMB_laddie_configname_config
     C%filename_BMB_laddie_initial_restart                    = filename_BMB_laddie_initial_restart_config
     C%filename_BMB_laddie_initial_output                     = filename_BMB_laddie_initial_output_config
     C%dir_BMB_laddie_model                                   = dir_BMB_laddie_model_config

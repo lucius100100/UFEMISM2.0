@@ -5,7 +5,7 @@ create_clean_config
 
 function fill_configuration_module
 
-filename_in  = '/Users/Beren017/Documents/GitHub/UFEMISM2.0/src/basic/model_configuration.f90';
+filename_in  = strrep("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\src\basic\model_configuration.f90", '\', '/');
 filename_out = filename_in;
 
 %% Read model_configuration.f90 source code
@@ -275,8 +275,8 @@ fclose( fid);
 end
 function create_clean_config
 
-filename_in  = '/Users/Beren017/Documents/GitHub/UFEMISM2.0/src/basic/model_configuration.f90';
-filename_out = '/Users/Beren017/Documents/GitHub/UFEMISM2.0/config-files/config_clean.cfg';
+filename_in  = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\src\basic\model_configuration.f90";
+filename_out = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\config-files\config_clean.cfg";
 
 %% Read model_configuration.f90 source code
 
