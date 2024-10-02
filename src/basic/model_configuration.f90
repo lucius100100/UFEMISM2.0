@@ -801,6 +801,7 @@ MODULE model_configuration
 
     ! "laddie"
     CHARACTER(LEN=256)  :: choice_BMB_laddie_system_config              = ''                               ! System on which the model is running: 'local_mac' or 'slurm_HPC'
+    CHARACTER(LEN=256)  :: filename_BMB_laddie_config                   = ''
     CHARACTER(LEN=256)  :: filename_BMB_laddie_configname_config        = ''                               ! File name of basal melt provided by LADDIE
     CHARACTER(LEN=256)  :: filename_BMB_laddie_initial_restart_config   = ''                               ! File name containing restart for laddie from laddie spinup
     CHARACTER(LEN=256)  :: filename_BMB_laddie_initial_output_config    = ''                               ! File name containing output from laddie spinup
@@ -1724,6 +1725,7 @@ MODULE model_configuration
     ! "laddie"
     CHARACTER(LEN=256)  :: choice_BMB_laddie_system
     CHARACTER(LEN=256)  :: filename_BMB_laddie
+    CHARACTER(LEN=256)  :: filename_bmb_laddie_configname
     CHARACTER(LEN=256)  :: filename_BMB_laddie_initial_restart
     CHARACTER(LEN=256)  :: filename_BMB_laddie_initial_output
     CHARACTER(LEN=256)  :: dir_BMB_laddie_model
@@ -2539,6 +2541,7 @@ CONTAINS
       BMB_Favier2019_gamma_config                                 , &
       choice_BMB_laddie_system_config                             , &
       filename_BMB_laddie_configname_config                       , &
+      filename_BMB_laddie_config                                  , &
       filename_BMB_laddie_initial_restart_config                  , &
       filename_BMB_laddie_initial_output_config                   , &
       dir_BMB_laddie_model_config                                 , &
@@ -3459,7 +3462,8 @@ CONTAINS
 
     ! "laddie"
     C%choice_BMB_laddie_system                               = choice_BMB_laddie_system_config
-    C%filename_BMB_laddie                                    = filename_BMB_laddie_configname_config
+    C%filename_BMB_laddie                                    = filename_BMB_laddie_config
+    C%filename_BMB_laddie_configname                         = filename_BMB_laddie_configname_config
     C%filename_BMB_laddie_initial_restart                    = filename_BMB_laddie_initial_restart_config
     C%filename_BMB_laddie_initial_output                     = filename_BMB_laddie_initial_output_config
     C%dir_BMB_laddie_model                                   = dir_BMB_laddie_model_config
