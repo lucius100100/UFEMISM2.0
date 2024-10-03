@@ -341,7 +341,7 @@ MODULE ocean_matrix
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
       required_timeframes = 2
     ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial') THEN
-        required_timeframes = 2  ! Minimum required for polynomial interpolation (capped to 4 for now)
+        required_timeframes = 3 
     ELSE
         CALL crash('Unknown interpolation method: ' // TRIM(C%choice_ocean_model_matrix))
         RETURN
@@ -364,7 +364,7 @@ MODULE ocean_matrix
     ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial') THEN
         CALL polynomial_interpolation(mesh, ocean, time, num_timeframes, times, weights)
     ELSE
-        CALL crash('Unknown choice_ocean_model_matrix "' // TRIM(C%choice_ocean_model_matrix) // '"')
+        CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
 
     ! Clean up arrays
