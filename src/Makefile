@@ -88,6 +88,7 @@ UFEMISM_source = \
   types/climate_model_types.f90 \
   types/ocean_model_types.f90 \
   types/SMB_model_types.f90 \
+  types/laddie_model_types.f90 \
   types/BMB_model_types.f90 \
   types/LMB_model_types.f90 \
   types/AMB_model_types.f90 \
@@ -216,6 +217,13 @@ UFEMISM_source = \
   validation/unit_tests/ut_petsc.f90 \
   validation/unit_tests/ut_mesh_Delaunay.f90 \
   validation/unit_tests/ut_mesh_refinement.f90 \
+  validation/unit_tests/ut_mesh_remapping_trace_line_grid_basic.f90 \
+  validation/unit_tests/ut_mesh_remapping_trace_line_grid_start.f90 \
+  validation/unit_tests/ut_mesh_remapping_trace_line_grid_a.f90 \
+  validation/unit_tests/ut_mesh_remapping_trace_line_grid_b.f90 \
+  validation/unit_tests/ut_mesh_remapping_trace_line_grid_cx.f90 \
+  validation/unit_tests/ut_mesh_remapping_trace_line_grid_cy.f90 \
+  validation/unit_tests/ut_mesh_remapping.f90 \
   validation/unit_tests/ut_mesh.f90 \
   validation/unit_tests/unit_tests.f90 \
   \
