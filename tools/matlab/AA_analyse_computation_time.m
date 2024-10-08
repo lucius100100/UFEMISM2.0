@@ -7,13 +7,13 @@ R = read_resource_tracking_file( filename);
 tcomp_tot_all = R.tcomp_tot;
 
 % Set up GUI
-wa = 1200;
-ha = 800;
+wa = 1000;
+ha = 600;
 
 wf = 25 + wa + 25;
 hf = 25 + ha + 25;
 
-H.Fig = figure('position',[200,200,wf,hf],'color','w');
+H.Fig = figure('position',[50,50,wf,hf],'color','w');
 H.Ax  = axes('units','pixels','position',[25,25,wa,ha],'xtick',[],'ytick',[],'fontsize',24);
 H.Ax.XAxis.Visible = 'off';
 H.Ax.YAxis.Visible = 'off';

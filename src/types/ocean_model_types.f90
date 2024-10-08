@@ -19,10 +19,8 @@ MODULE ocean_model_types
     REAL(dp) :: t1                                                         ! End time for interpolation     
 
     ! Temperature and salinity arrays at each timeframe
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: T0  ! Temperature at t0
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: S0  ! Salinity at t0
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: T1  ! Temperature at t1
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: S1  ! Salinity at t1    
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: T                           ! [degrees Celsius] Temperature
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: S                           ! [PSU]             Salinity  
 
   END TYPE type_ocean_matrix_interpolation
 
