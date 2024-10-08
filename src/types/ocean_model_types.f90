@@ -12,24 +12,19 @@ MODULE ocean_model_types
 ! ===== Types =====
 ! =================
 
-  TYPE :: type_timeframe
-  
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: T                            ! [degrees Celsius] Temperature
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: S                            ! [PSU]             Salinity
-  
-  END TYPE type_timeframe
-
-  TYPE type_ocean_matrix
+  TYPE type_ocean_matrix_interpolation
 
     ! Time fields for interpolation
     REAL(dp) :: t0                                                         ! Start time for interpolation
     REAL(dp) :: t1                                                         ! End time for interpolation     
 
-    ! Timeframes for interpolation
-    TYPE(type_timeframe), ALLOCATABLE :: timeframe0                        ! Ocean state at t0
-    TYPE(type_timeframe), ALLOCATABLE :: timeframe1                        ! Ocean state at t1
-    
-  END TYPE type_ocean_matrix
+    ! Temperature and salinity arrays at each timeframe
+    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: T0  ! Temperature at t0
+    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: S0  ! Salinity at t0
+    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: T1  ! Temperature at t1
+    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: S1  ! Salinity at t1    
+
+  END TYPE type_ocean_matrix_interpolation
 
   TYPE type_ocean_model
     ! The ocean model data structure.
@@ -47,9 +42,6 @@ MODULE ocean_model_types
 
     ! Timestepping
     REAL(dp)                                :: t_next
-
-    ! Matrix ocean model
-    TYPE(type_ocean_matrix)                 :: matrix                      ! Data structure to handle multiple timeframes for interpolation
 
   END TYPE type_ocean_model
 
