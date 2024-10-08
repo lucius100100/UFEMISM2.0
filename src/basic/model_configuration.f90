@@ -690,18 +690,18 @@ MODULE model_configuration
     ! Choice of realistic ocean model
     CHARACTER(LEN=256)  :: choice_ocean_model_realistic_config          = ''
 
-    ! Choice of matrix ocean model
-    CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = 'linear'                               ! Choice between linear and polynomial
-
     ! Paths to files containing fields for realistic ocean
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_NAM_config           = ''
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_EAS_config           = ''
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_GRL_config           = ''
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT_config           = ''
 
+    ! Choice of matrix ocean model
+    CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = ''                               ! Choice between linear and polynomial
+
     ! Paths to files containing fields for matrix ocean
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base1_config                    = ''
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base2_config                    = ''
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base1_config            = ''
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base2_config            = ''
 
   ! == Surface mass balance
   ! =======================
@@ -1667,8 +1667,8 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT
 
     ! Paths to files containing fields for matrix ocean
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base1                    = ''
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base2                    = ''
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base1  
+    CHARACTER(LEN=256) :: filename_ocean_matrix_base2 
 
   ! == Surface mass balance
   ! =======================
