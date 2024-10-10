@@ -30,7 +30,7 @@ CONTAINS
 ! ===== Main routines =====
 ! =========================
 
-  SUBROUTINE run_ocean_model( mesh, ice, matrix, ocean, region_name, time)
+  SUBROUTINE run_ocean_model( mesh, ice, ocean, region_name, time)
     ! Calculate the ocean
 
     IMPLICIT NONE
@@ -38,7 +38,6 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ice_model),                   INTENT(IN)    :: ice
-    TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
     REAL(dp),                               INTENT(IN)    :: time
@@ -46,6 +45,7 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_ocean_model'
     CHARACTER(LEN=256)                                    :: choice_ocean_model
+    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -94,7 +94,7 @@ CONTAINS
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL run_ocean_model_realistic( mesh, ice, ocean)
     ELSEIF (choice_ocean_model == 'matrix') THEN
-      CALL run_ocean_model_matrix( mesh, ice, matrix, ocean, time, region_name)
+      CALL run_ocean_model_matrix( mesh, ice, ocean, time, region_name)
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF
@@ -108,7 +108,7 @@ CONTAINS
 
   END SUBROUTINE run_ocean_model
 
-  SUBROUTINE initialise_ocean_model( mesh, ocean, matrix, region_name)
+  SUBROUTINE initialise_ocean_model( mesh, ocean, region_name)
     ! Initialise the ocean model
 
     IMPLICIT NONE
@@ -116,12 +116,12 @@ CONTAINS
     ! In- and output variables
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(OUT)   :: ocean
-    TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model'
     CHARACTER(LEN=256)                                    :: choice_ocean_model
+    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -168,7 +168,7 @@ CONTAINS
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL initialise_ocean_model_realistic( mesh, ocean, region_name)
     ELSEIF (choice_ocean_model == 'matrix') THEN
-      CALL initialise_ocean_model_matrix( mesh, ocean, matrix, region_name)
+      CALL initialise_ocean_model_matrix( mesh, ocean, region_name)
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF
@@ -178,7 +178,7 @@ CONTAINS
 
   END SUBROUTINE initialise_ocean_model
 
-  SUBROUTINE write_to_restart_file_ocean_model( mesh, ocean, matrix, region_name, time)
+  SUBROUTINE write_to_restart_file_ocean_model( mesh, ocean, region_name, time)
     ! Write to the restart file for the ocean model
 
     IMPLICIT NONE
@@ -186,13 +186,13 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(IN)    :: ocean
-    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
     REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'write_to_restart_file_ocean_model'
     CHARACTER(LEN=256)                                    :: choice_ocean_model
+    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -216,9 +216,9 @@ CONTAINS
     ELSEIF (choice_ocean_model == 'idealised') THEN
       ! No need to do anything
     ELSEIF (choice_ocean_model == 'realistic') THEN
-      CALL write_to_restart_file_ocean_model_region( mesh, ocean, matrix, region_name, time)
+      CALL write_to_restart_file_ocean_model_region( mesh, ocean, region_name, time)
     ELSEIF (choice_ocean_model == 'matrix') THEN
-      CALL write_to_restart_file_ocean_model_region( mesh, ocean, matrix, region_name, time)
+      CALL write_to_restart_file_ocean_model_region( mesh, ocean, region_name, time)
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF
@@ -228,7 +228,7 @@ CONTAINS
 
   END SUBROUTINE write_to_restart_file_ocean_model
 
-  SUBROUTINE write_to_restart_file_ocean_model_region( mesh, ocean, matrix, region_name, time)
+  SUBROUTINE write_to_restart_file_ocean_model_region( mesh, ocean, region_name, time)
     ! Write to the restart NetCDF file for the ocean model
 
     IMPLICIT NONE
@@ -236,13 +236,13 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(IN)    :: ocean
-    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
     REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER         :: routine_name = 'write_to_restart_file_ocean_model_region'
-    INTEGER                               :: ncid
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'write_to_restart_file_ocean_model_region'
+    INTEGER                                               :: ncid
+    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -313,7 +313,7 @@ CONTAINS
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL create_restart_file_ocean_model_region( mesh, ocean, region_name)
     ELSEIF (choice_ocean_model == 'matrix') THEN
-      CALL create_restart_file_ocean_model_region( mesh, ocean, matrix, region_name) 
+      CALL create_restart_file_ocean_model_region( mesh, ocean, region_name) 
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF
@@ -323,7 +323,7 @@ CONTAINS
 
   END SUBROUTINE create_restart_file_ocean_model
 
-  SUBROUTINE create_restart_file_ocean_model_region( mesh, ocean, matrix, region_name)
+  SUBROUTINE create_restart_file_ocean_model_region( mesh, ocean, region_name)
     ! Create a restart NetCDF file for the ocean submodel
     ! Includes generation of the procedural filename (e.g. "restart_ocean_00001.nc")
 
@@ -332,7 +332,6 @@ CONTAINS
     ! In/output variables:
     TYPE(type_mesh),        INTENT(IN)    :: mesh
     TYPE(type_ocean_model), INTENT(INOUT) :: ocean
-    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
     CHARACTER(LEN=3),       INTENT(IN)    :: region_name
 
     ! Local variables:

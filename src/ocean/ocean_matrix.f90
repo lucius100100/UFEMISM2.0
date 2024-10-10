@@ -12,7 +12,7 @@ MODULE ocean_matrix
     USE parameters
     USE mesh_types                                             , ONLY: type_mesh
     USE ice_model_types                                        , ONLY: type_ice_model
-    USE ocean_model_types                                      , ONLY: type_ocean_model, type_ocean_matrix_interpolation, type_timeframe
+    USE ocean_model_types                                      , ONLY: type_ocean_model, type_ocean_matrix_interpolation
     USE netcdf_input                                           , ONLY: read_field_from_file_3D_ocean
     USE netcdf_basic                                           , ONLY: field_name_options_T_ocean, field_name_options_S_ocean
   
@@ -89,7 +89,7 @@ MODULE ocean_matrix
     ! In- and output variables
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
-    TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
     REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
@@ -195,7 +195,7 @@ MODULE ocean_matrix
   
   !END SUBROUTINE polynomial_interpolation
 
-  SUBROUTINE run_ocean_model_matrix( mesh, ice, matrix, ocean, time, region_name)
+  SUBROUTINE run_ocean_model_matrix( mesh, ice, ocean, time, region_name)
     ! Calculate the ocean
     !
     ! Use an interpolating matrix ocean scheme
@@ -205,13 +205,13 @@ MODULE ocean_matrix
     ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ice_model),                   INTENT(IN)    :: ice
-    TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
     REAL(dp),                               INTENT(IN)    :: time
   
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_ocean_model_matrix'
+    TYPE(type_ocean_matrix_interpolation)                 :: matrix
     INTEGER                                               :: required_timeframes
 
     ! Add routine to path
@@ -251,7 +251,7 @@ MODULE ocean_matrix
   
   END SUBROUTINE run_ocean_model_matrix
   
-  SUBROUTINE initialise_ocean_model_matrix( mesh, ocean, matrix, region_name)
+  SUBROUTINE initialise_ocean_model_matrix( mesh, ocean, region_name)
     ! Initialise the ocean matrix model
   
     IMPLICIT NONE
@@ -259,11 +259,11 @@ MODULE ocean_matrix
     ! In- and output variables
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
-    TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
   
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model_matrix'
+    TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)

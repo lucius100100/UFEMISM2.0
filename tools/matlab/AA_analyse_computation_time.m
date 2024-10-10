@@ -1,6 +1,6 @@
 function AA_analyse_computation_time
   
-filename = 'C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_ant_template\resource_tracking.nc';
+filename = 'C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_ant_template_working\resource_tracking.nc';
 
 R = read_resource_tracking_file( filename);
 

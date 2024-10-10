@@ -12,15 +12,22 @@ MODULE ocean_model_types
 ! ===== Types =====
 ! =================
 
+  TYPE type_timeframe
+  
+    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: T                            ! Temperature array for this timeframe
+    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: S                            ! Salinity array for this timeframe
+  
+  END TYPE type_timeframe
+
   TYPE type_ocean_matrix_interpolation
 
     ! Time fields for interpolation
     REAL(dp) :: t0                                                         ! Start time for interpolation
     REAL(dp) :: t1                                                         ! End time for interpolation     
 
-    ! Temperature and salinity arrays at each timeframe
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: T                           ! [degrees Celsius] Temperature
-    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: S                           ! [PSU]             Salinity  
+    ! Timeframes containing temperature and salinity data
+    TYPE(type_timeframe) :: timeframe0                                     ! LGM
+    TYPE(type_timeframe) :: timeframe1                                     ! PI                      
 
   END TYPE type_ocean_matrix_interpolation
 

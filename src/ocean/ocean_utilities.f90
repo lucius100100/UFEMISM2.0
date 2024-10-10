@@ -12,7 +12,7 @@ MODULE ocean_utilities
   USE parameters
   USE mesh_types                                             , ONLY: type_mesh
   USE ice_model_types                                        , ONLY: type_ice_model
-  USE ocean_model_types                                      , ONLY: type_ocean_model
+  USE ocean_model_types                                      , ONLY: type_ocean_model, type_ocean_matrix_interpolation
 
   IMPLICIT NONE
 
