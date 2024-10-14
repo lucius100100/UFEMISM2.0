@@ -703,8 +703,8 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = ''                               ! Choice between linear and polynomial
 
     ! Paths to files containing fields for matrix ocean
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base1_config            = ''
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base2_config            = ''
+    CHARACTER(LEN=256)  :: filename_ocean_matrix_base1_config            = ''
+    CHARACTER(LEN=256)  :: filename_ocean_matrix_base2_config            = ''
 
   ! == Surface mass balance
   ! =======================
@@ -1668,18 +1668,18 @@ MODULE model_configuration
     ! Choice of realistic ocean model
     CHARACTER(LEN=256)  :: choice_ocean_model_realistic
 
-    ! Choice of matrix ocean model
-    CHARACTER(LEN=256)  :: choice_ocean_model_matrix
-
     ! Paths to files containing fields for realistic ocean
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_NAM
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_EAS
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_GRL
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT
 
+    ! Choice of matrix ocean model
+    CHARACTER(LEN=256)  :: choice_ocean_model_matrix
+
     ! Paths to files containing fields for matrix ocean
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base1  
-    CHARACTER(LEN=256) :: filename_ocean_matrix_base2 
+    CHARACTER(LEN=256)  :: filename_ocean_matrix_base1  
+    CHARACTER(LEN=256)  :: filename_ocean_matrix_base2 
 
   ! == Surface mass balance
   ! =======================
@@ -3521,14 +3521,14 @@ CONTAINS
     ! Choice of realistic ocean model
     C%choice_ocean_model_realistic                           = choice_ocean_model_realistic_config
 
-    ! Choice of matrix ocean model
-    C%choice_ocean_model_matrix                              = choice_ocean_model_matrix_config
-
     ! Paths to files containing fields for realistic ocean
     C%filename_ocean_snapshot_NAM                            = filename_ocean_snapshot_NAM_config
     C%filename_ocean_snapshot_EAS                            = filename_ocean_snapshot_EAS_config
     C%filename_ocean_snapshot_GRL                            = filename_ocean_snapshot_GRL_config
     C%filename_ocean_snapshot_ANT                            = filename_ocean_snapshot_ANT_config
+
+    ! Choice of matrix ocean model
+    C%choice_ocean_model_matrix                              = choice_ocean_model_matrix_config
 
     ! Paths to files containing fields for matrix ocean
     C%filename_ocean_matrix_base1                            = filename_ocean_matrix_base1_config

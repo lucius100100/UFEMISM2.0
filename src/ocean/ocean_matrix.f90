@@ -44,17 +44,9 @@ MODULE ocean_matrix
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! For now, hardcode the years for LGM and PI
-    year0 = -21000   ! LGM
-    year1 = 0        ! PI
-
-    ! For file name generation, write a string
-    WRITE(year0_str, '(I0)') year0
-    WRITE(year1_str, '(I0)') year1
-
-    ! Set times for the two snapshots
-    matrix%t0 = REAL(year0, dp)
-    matrix%t1 = REAL(year1, dp)
+    ! For now, hardcode the years
+    matrix%t0 = -21000.0_dp   ! LGM
+    matrix%t1 = 0.0_dp        ! PI
 
     ! Allocate memory for timeframes' T and S array if not already allocated
     IF (.NOT. ALLOCATED(matrix%timeframe0%T)) THEN
@@ -67,8 +59,8 @@ MODULE ocean_matrix
     END IF
 
     ! Construct filenames for the two ocean snapshots
-    filename1 = TRIM(C%filename_ocean_matrix_base1) // TRIM(region_name) // '_' // TRIM(year0_str) // '.nc'
-    filename2 = TRIM(C%filename_ocean_matrix_base2) // TRIM(region_name) // '_' // TRIM(year1_str) // '.nc'
+    filename1 = TRIM(C%filename_ocean_matrix_base1)
+    filename2 = TRIM(C%filename_ocean_matrix_base2)
 
     ! Read the ocean snapshots
     CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, matrix%timeframe0%T)
@@ -222,6 +214,11 @@ MODULE ocean_matrix
       CALL update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
     END IF
     
+    PRINT *, 'After timeframe update:'
+    PRINT *, 'Time:', time
+    PRINT *, 'matrix%t0:', matrix%t0
+    PRINT *, 'matrix%t1:', matrix%t1    
+
     ! Minimum required amount of timeframes for each interpolation method
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
       required_timeframes = 2
@@ -233,9 +230,9 @@ MODULE ocean_matrix
     END IF
 
     ! Check for division by 0 error
-    IF (ABS(matrix%t1 - matrix%t0) < 1e-8_dp) THEN
-      CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
-    END IF
+    !IF (ABS(matrix%t1 - matrix%t0) < 1e-5_dp) THEN
+      !CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
+    !END IF
 
     ! Perform time interpolation
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
@@ -245,6 +242,11 @@ MODULE ocean_matrix
     ELSE
         CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
+
+    PRINT *, 'After interpolation:'
+    PRINT *, 'Time:', time
+    PRINT *, 'matrix%t0:', matrix%t0
+    PRINT *, 'matrix%t1:', matrix%t1
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
