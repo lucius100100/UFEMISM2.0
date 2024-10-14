@@ -50,7 +50,7 @@ MODULE netcdf_basic
   CHARACTER(LEN=256), PARAMETER :: field_name_options_lat            = 'lat||Lat||latitude||Latitude'
   CHARACTER(LEN=256), PARAMETER :: field_name_options_time           = 'time||Time||t||nt'
   CHARACTER(LEN=256), PARAMETER :: field_name_options_month          = 'month||Month'
-  CHARACTER(LEN=256), PARAMETER :: field_name_options_depth          = 'depth||Depth'
+  CHARACTER(LEN=256), PARAMETER :: field_name_options_depth          = 'depth||Depth||lev'
 
   ! Mesh
   CHARACTER(LEN=256), PARAMETER :: field_name_options_dim_nV         = 'vi'

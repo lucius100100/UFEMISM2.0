@@ -2920,7 +2920,7 @@ CONTAINS
     CHARACTER(LEN=*),                    INTENT(IN)    :: filename
     INTEGER,                             INTENT(IN)    :: ncid
     INTEGER,                             INTENT(OUT)   :: ndepth
-    REAL(dp), DIMENSION(:), ALLOCATABLE, INTENT(OUT)   ::  depth
+    REAL(dp), DIMENSION(:), ALLOCATABLE, INTENT(OUT)   :: depth
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                      :: routine_name = 'setup_depth_from_file'

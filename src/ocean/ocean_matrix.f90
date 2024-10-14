@@ -38,8 +38,8 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'update_ocean_matrix_timeframes'
     CHARACTER(LEN=256)                                    :: filename1, filename2
-    CHARACTER(LEN=20)                                     :: year0_str, year1_str
-    INTEGER                                               :: year0, year1
+    INTEGER                                               :: ndepth
+    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -47,6 +47,12 @@ MODULE ocean_matrix
     ! For now, hardcode the years
     matrix%t0 = -21000.0_dp   ! LGM
     matrix%t1 = 0.0_dp        ! PI
+
+    ! For now, hardcode the depth 
+    !ndepth = 11
+    !ALLOCATE(depth(ndepth))
+    !depth = (/0.0_dp, 150.0_dp, 300.0_dp, 450.0_dp, 600.0_dp, 750.0_dp, 900.0_dp, &
+              !1050.0_dp, 1200.0_dp, 1350.0_dp, 1500.0_dp/)
 
     ! Allocate memory for timeframes' T and S array if not already allocated
     IF (.NOT. ALLOCATED(matrix%timeframe0%T)) THEN
