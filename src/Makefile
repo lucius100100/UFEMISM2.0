@@ -171,6 +171,15 @@ UFEMISM_source = \
   surface_mass_balance/SMB_prescribed.f90 \
   surface_mass_balance/SMB_main.f90 \
   \
+  ocean/ocean_utilities.f90 \
+  ocean/ocean_idealised.f90 \
+  ocean/ocean_realistic.f90 \
+  ocean/ocean_matrix.f90 \
+  ocean/ocean_main.f90 \
+  \
+  laddie/laddie_utilities.f90 \
+  laddie/laddie_main.f90 \
+  \
   basal_mass_balance/BMB_idealised.f90 \
   basal_mass_balance/BMB_prescribed.f90 \
   basal_mass_balance/BMB_parameterised.f90 \
@@ -202,11 +211,6 @@ UFEMISM_source = \
   climate/climate_realistic.f90 \
   climate/climate_main.f90 \
   \
-  ocean/ocean_utilities.f90 \
-  ocean/ocean_matrix.f90 \
-  ocean/ocean_realistic.f90 \
-  ocean/ocean_main.f90 \
-  \
   glacial_isostatic_adjustment/GIA_main.f90 \
   \
   main/main_regional_output.f90 \
@@ -217,7 +221,6 @@ UFEMISM_source = \
   validation/unit_tests/ut_petsc.f90 \
   validation/unit_tests/ut_mesh_Delaunay.f90 \
   validation/unit_tests/ut_mesh_refinement.f90 \
-  validation/unit_tests/ut_mesh_remapping_trace_line_grid_basic.f90 \
   validation/unit_tests/ut_mesh_remapping_trace_line_grid_start.f90 \
   validation/unit_tests/ut_mesh_remapping_trace_line_grid_a.f90 \
   validation/unit_tests/ut_mesh_remapping_trace_line_grid_b.f90 \

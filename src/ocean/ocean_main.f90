@@ -45,7 +45,6 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_ocean_model'
     CHARACTER(LEN=256)                                    :: choice_ocean_model
-    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -89,8 +88,8 @@ CONTAINS
     ! Run the chosen ocean model
     IF (choice_ocean_model == 'none') THEN
       ! No need to do anything
-    ELSEIF (choice_ocean_model == 'idealised') THEN
-      CALL crash('No idealised options implemented yet')
+    !ELSEIF (choice_ocean_model == 'idealised') THEN
+      !CALL run_ocean_model_idealised( mesh, ice, ocean)
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL run_ocean_model_realistic( mesh, ice, ocean)
     ELSEIF (choice_ocean_model == 'matrix') THEN
@@ -121,7 +120,6 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model'
     CHARACTER(LEN=256)                                    :: choice_ocean_model
-    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -163,8 +161,8 @@ CONTAINS
     ! Determine which ocean model to initialise
     IF     (choice_ocean_model == 'none') THEN
       ! No need to do anything
-    ELSEIF (choice_ocean_model == 'idealised') THEN
-      CALL crash('No idealised options implemented yet')
+    !ELSEIF (choice_ocean_model == 'idealised') THEN
+      !CALL initialise_ocean_model_idealised( mesh, ocean)
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL initialise_ocean_model_realistic( mesh, ocean, region_name)
     ELSEIF (choice_ocean_model == 'matrix') THEN
@@ -192,7 +190,6 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'write_to_restart_file_ocean_model'
     CHARACTER(LEN=256)                                    :: choice_ocean_model
-    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -213,7 +210,7 @@ CONTAINS
     ! Write to the restart file of the chosen ocean model
     IF     (choice_ocean_model == 'none') THEN
       ! No need to do anything
-    ELSEIF (choice_ocean_model == 'idealised') THEN
+    !ELSEIF (choice_ocean_model == 'idealised') THEN
       ! No need to do anything
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL write_to_restart_file_ocean_model_region( mesh, ocean, region_name, time)
@@ -242,7 +239,6 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'write_to_restart_file_ocean_model_region'
     INTEGER                                               :: ncid
-    !TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -308,7 +304,7 @@ CONTAINS
     ! Create the restart file of the chosen ocean model
     IF     (choice_ocean_model == 'none') THEN
       ! No need to do anything
-    ELSEIF (choice_ocean_model == 'idealised') THEN
+    !ELSEIF (choice_ocean_model == 'idealised') THEN
       ! No need to do anything
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL create_restart_file_ocean_model_region( mesh, ocean, region_name)
@@ -425,8 +421,9 @@ CONTAINS
     ! Determine which ocean model to remap
     IF     (choice_ocean_model == 'none') THEN
       ! No need to do anything
-    ELSEIF (choice_ocean_model == 'idealised') THEN
-      ! No need to do anything
+    !ELSEIF (choice_ocean_model == 'idealised') THEN
+      ! Not implemented yet TODO 
+      CALL crash('Remapping after mesh update not implemented yet for idealised ocean')
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL crash('Remapping after mesh update not implemented yet for realistic ocean')
     ELSEIF (choice_ocean_model == 'matrix') THEN
