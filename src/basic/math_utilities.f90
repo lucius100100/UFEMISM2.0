@@ -3535,7 +3535,7 @@ CONTAINS
     max_dist = maxval([ abs( z_src( nz_src) - z_src( 1)), &
                         abs( z_dst( nz_dst) - z_dst( 1)), &
                         abs( z_src( nz_src) - z_dst( 1)), &
-                        abs( z_dst( nz_dst) - z_src( 1))])
+                        abs( z_dst( nz_dst) - z_src( 1))])*2._dp
 
     ! Exception for when the entire src field is masked
     all_are_masked = .true.
@@ -3630,6 +3630,7 @@ CONTAINS
         do k_src = 1, nz_src
           if (mask_src( k_src) == 1) then
             dist_to_dst = abs( z_src( k_src) - z_dst( k_dst))
+            !IF(par%master) WRITE(0,*) 'k_src = ', k_src, 'dist_to_dst = ', dist_to_dst
             if (dist_to_dst < dist_to_dst_min) then
               dist_to_dst_min      = dist_to_dst
               k_src_nearest_to_dst = k_src
@@ -3638,8 +3639,11 @@ CONTAINS
         end do
 
         ! Safety
-        if (k_src_nearest_to_dst == 0) then
-          WRITE(0,*) '  remap_cons_2nd_order_1D - ERROR: couldnt find nearest neighbour on source grid!'
+        if (k_src_nearest_to_dst == 0) then 
+          IF(par%master) WRITE(0,*) '  remap_cons_2nd_order_1D - ERROR: couldnt find nearest neighbour on source grid!'
+          IF(par%master) WRITE(0,*) 'z_src = ', z_src 
+          IF(par%master) WRITE(0,*) 'z_dst = ', z_dst
+          IF(par%master) WRITE(0,*) 'mask_src = ', mask_src
           call MPI_ABORT( MPI_COMM_WORLD, cerr, ierr)
         end if
 

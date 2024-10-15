@@ -38,8 +38,8 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'update_ocean_matrix_timeframes'
     CHARACTER(LEN=256)                                    :: filename1, filename2
-    INTEGER                                               :: ndepth
-    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
+    !INTEGER                                               :: ndepth
+    !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -48,7 +48,7 @@ MODULE ocean_matrix
     matrix%t0 = -21000.0_dp   ! LGM
     matrix%t1 = 0.0_dp        ! PI
 
-    ! For now, hardcode the depth 
+    ! Possibility to hardcode the depth, should then be called in read_field_from_file_3D_ocean command
     !ndepth = 11
     !ALLOCATE(depth(ndepth))
     !depth = (/0.0_dp, 150.0_dp, 300.0_dp, 450.0_dp, 600.0_dp, 750.0_dp, 900.0_dp, &
@@ -220,10 +220,10 @@ MODULE ocean_matrix
       CALL update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
     END IF
     
-    PRINT *, 'After timeframe update:'
-    PRINT *, 'Time:', time
-    PRINT *, 'matrix%t0:', matrix%t0
-    PRINT *, 'matrix%t1:', matrix%t1    
+    !PRINT *, 'After timeframe update:'
+    !PRINT *, 'Time:', time
+    !PRINT *, 'matrix%t0:', matrix%t0
+    !PRINT *, 'matrix%t1:', matrix%t1    
 
     ! Minimum required amount of timeframes for each interpolation method
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
@@ -236,9 +236,9 @@ MODULE ocean_matrix
     END IF
 
     ! Check for division by 0 error
-    !IF (ABS(matrix%t1 - matrix%t0) < 1e-5_dp) THEN
-      !CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
-    !END IF
+    IF (ABS(matrix%t1 - matrix%t0) < 1e-5_dp) THEN
+      CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
+    END IF
 
     ! Perform time interpolation
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
@@ -251,8 +251,8 @@ MODULE ocean_matrix
 
     PRINT *, 'After interpolation:'
     PRINT *, 'Time:', time
-    PRINT *, 'matrix%t0:', matrix%t0
-    PRINT *, 'matrix%t1:', matrix%t1
+    PRINT *, 'wt0:', wt0
+    PRINT *, 'wt1:', wt1
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
