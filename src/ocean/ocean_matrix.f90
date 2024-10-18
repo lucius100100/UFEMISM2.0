@@ -236,9 +236,9 @@ MODULE ocean_matrix
     END IF
 
     ! Check for division by 0 error
-    IF (ABS(matrix%t1 - matrix%t0) < 1e-5_dp) THEN
-      CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
-    END IF
+    !IF (ABS(matrix%t1 - matrix%t0) < 1e-5_dp) THEN
+      !CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
+    !END IF
 
     ! Perform time interpolation
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear') THEN
@@ -249,10 +249,7 @@ MODULE ocean_matrix
         CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
 
-    PRINT *, 'After interpolation:'
-    PRINT *, 'Time:', time
-    PRINT *, 'wt0:', wt0
-    PRINT *, 'wt1:', wt1
+    ! PRINT *, 'After interpolation:', 'Time:', time, 'wt0:', wt0, 'wt1:', wt1
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

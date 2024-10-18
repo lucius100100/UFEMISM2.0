@@ -35,7 +35,8 @@ MODULE main_regional_output
                                                                      write_to_field_multopt_grid_dp_2D, write_to_field_multopt_grid_dp_2D_notime, &
                                                                      write_to_field_multopt_grid_dp_2D_monthly, write_to_field_multopt_grid_dp_2D_monthly_notime, &
                                                                      write_to_field_multopt_grid_dp_3D, write_to_field_multopt_grid_dp_3D_notime, &
-                                                                     write_to_field_multopt_dp_0D
+                                                                     write_to_field_multopt_dp_0D, add_field_mesh_dp_3D_ocean, write_to_field_multopt_mesh_dp_3D_ocean, &
+                                                                     add_depth_dimension_to_file
   use remapping_main, only: map_from_mesh_to_xy_grid_2D, map_from_mesh_to_xy_grid_3D, map_from_mesh_to_xy_grid_2D_minval
 
   IMPLICIT NONE
@@ -86,6 +87,8 @@ CONTAINS
     CALL write_to_main_regional_output_file_mesh_field( region, region%output_filename_mesh, ncid, 'u_surf')
     CALL write_to_main_regional_output_file_mesh_field( region, region%output_filename_mesh, ncid, 'v_surf')
     CALL write_to_main_regional_output_file_mesh_field( region, region%output_filename_mesh, ncid, 'uabs_surf')
+    CALL write_to_main_regional_output_file_mesh_field( region, region%output_filename_mesh, ncid, 'T_ocean')
+    CALL write_to_main_regional_output_file_mesh_field( region, region%output_filename_mesh, ncid, 'S_ocean')
 
     ! Write all user-defined data fields to the file
     CALL write_to_main_regional_output_file_mesh_field( region, region%output_filename_mesh, ncid, C%choice_output_field_01)
@@ -185,6 +188,8 @@ CONTAINS
     CALL write_to_main_regional_output_file_grid_field( region, region%output_grid, region%output_filename_grid, ncid, 'u_surf')
     CALL write_to_main_regional_output_file_grid_field( region, region%output_grid, region%output_filename_grid, ncid, 'v_surf')
     CALL write_to_main_regional_output_file_grid_field( region, region%output_grid, region%output_filename_grid, ncid, 'uabs_surf')
+    CALL write_to_main_regional_output_file_grid_field( region, region%output_grid, region%output_filename_grid, ncid, 'T_ocean')
+    CALL write_to_main_regional_output_file_grid_field( region, region%output_grid, region%output_filename_grid, ncid, 'S_ocean')
 
     ! Write all user-defined data fields to the file
     CALL write_to_main_regional_output_file_grid_field( region, region%output_grid, region%output_filename_grid, ncid, C%choice_output_field_01)
@@ -286,6 +291,8 @@ CONTAINS
     CALL write_to_main_regional_output_file_grid_field( region, grid, filename, ncid, 'u_surf')
     CALL write_to_main_regional_output_file_grid_field( region, grid, filename, ncid, 'v_surf')
     CALL write_to_main_regional_output_file_grid_field( region, grid, filename, ncid, 'uabs_surf')
+    CALL write_to_main_regional_output_file_grid_field( region, grid, filename, ncid, 'T_ocean')
+    CALL write_to_main_regional_output_file_grid_field( region, grid, filename, ncid, 'S_ocean')
 
     ! Write all user-defined data fields to the file
     CALL write_to_main_regional_output_file_grid_field( region, grid, filename, ncid, C%choice_output_field_01)
@@ -738,9 +745,9 @@ CONTAINS
 
       ! Main ocean variables
       CASE ('T_ocean')
-        CALL warning('ocean temperature not implemented yet!')
+        CALL write_to_field_multopt_mesh_dp_3D_ocean( region%mesh, filename, ncid, 'T_ocean', region%ocean%T)
       CASE ('S_ocean')
-        CALL warning('ocean salinity not implemented yet!')
+        CALL write_to_field_multopt_mesh_dp_3D_ocean( region%mesh, filename, ncid, 'S_ocean', region%ocean%S)
 
     ! == Surface mass balance ==
     ! ==========================
@@ -1420,6 +1427,7 @@ CONTAINS
     CALL add_time_dimension_to_file(  region%output_filename_mesh, ncid)
     CALL add_zeta_dimension_to_file(  region%output_filename_mesh, ncid, region%mesh%zeta)
     CALL add_month_dimension_to_file( region%output_filename_mesh, ncid)
+    CALL add_depth_dimension_to_file( region%output_filename_mesh, ncid, C%z_ocean)
 
     ! Add the default data fields to the file
     CALL create_main_regional_output_file_mesh_field( region%output_filename_mesh, ncid, 'Hi')
@@ -1429,6 +1437,8 @@ CONTAINS
     CALL create_main_regional_output_file_mesh_field( region%output_filename_mesh, ncid, 'u_surf')
     CALL create_main_regional_output_file_mesh_field( region%output_filename_mesh, ncid, 'v_surf')
     CALL create_main_regional_output_file_mesh_field( region%output_filename_mesh, ncid, 'uabs_surf')
+    CALL create_main_regional_output_file_mesh_field( region%output_filename_mesh, ncid, 'T_ocean')
+    CALL create_main_regional_output_file_mesh_field( region%output_filename_mesh, ncid, 'S_ocean')
 
     ! Add all user-defined data fields to the file
     CALL create_main_regional_output_file_mesh_field( region%output_filename_mesh, ncid, C%choice_output_field_01)
@@ -1536,6 +1546,8 @@ CONTAINS
     CALL create_main_regional_output_file_grid_field( region%output_filename_grid, ncid, 'u_surf')
     CALL create_main_regional_output_file_grid_field( region%output_filename_grid, ncid, 'v_surf')
     CALL create_main_regional_output_file_grid_field( region%output_filename_grid, ncid, 'uabs_surf')
+    CALL create_main_regional_output_file_grid_field( region%output_filename_grid, ncid, 'T_ocean')
+    CALL create_main_regional_output_file_grid_field( region%output_filename_grid, ncid, 'S_ocean')
 
     ! Add all user-defined data fields to the file
     CALL create_main_regional_output_file_grid_field( region%output_filename_grid, ncid, C%choice_output_field_01)
@@ -1642,6 +1654,8 @@ CONTAINS
     CALL create_main_regional_output_file_grid_field( filename, ncid, 'u_surf')
     CALL create_main_regional_output_file_grid_field( filename, ncid, 'v_surf')
     CALL create_main_regional_output_file_grid_field( filename, ncid, 'uabs_surf')
+    CALL create_main_regional_output_file_grid_field( filename, ncid, 'T_ocean')
+    CALL create_main_regional_output_file_grid_field( filename, ncid, 'S_ocean')
 
     ! Add all user-defined data fields to the file
     CALL create_main_regional_output_file_grid_field( filename, ncid, C%choice_output_field_01)
@@ -2043,9 +2057,9 @@ CONTAINS
 
       ! Main ocean variables
       CASE ('T_ocean')
-        CALL warning('ocean temperature not implemented yet!')
+        CALL add_field_mesh_dp_3D_ocean(filename, ncid, 'T_ocean', long_name = 'Temperature field', units = 'Celsius')
       CASE ('S_ocean')
-        CALL warning('ocean salinity not implemented yet!')
+        CALL add_field_mesh_dp_3D_ocean(filename, ncid, 'S_ocean', long_name = 'Salinity field', units = 'PSU')
 
     ! == Surface mass balance ==
     ! ==========================
