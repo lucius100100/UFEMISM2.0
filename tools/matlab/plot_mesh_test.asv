@@ -4,14 +4,14 @@ function plot_mesh_test
     clear all
     close all
     
-    filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_ant_template_test\main_output_ANT_00001.nc";
+    filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_ant_template_test_1\main_output_ANT_00001.nc";
     
     mesh = read_mesh_from_file(filename);
     % plot_mesh(mesh);
     
     Hs = ncread(filename, 'Hs');
     
-    plot_mesh_data(mesh, Hs(:, 11)-Hs(:,1));
+    plot_mesh_data(mesh, Hs(:, 101)-Hs(:,1));
     plot_mesh_data(mesh, Hs(:));
     
     % diff = Hs(:,11) - Hs(:,1);

@@ -700,9 +700,14 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT_config           = ''
 
     ! Choice of matrix ocean model
-    CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = ''                               ! Choice between linear and polynomial
+    CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = ''                               ! Choice between linear_time, polynomial_time, GHG_based, Insolation
+    CHARACTER(LEN=256)  :: choice_ghg_inclusion_config                  = ''                               ! Choice of GHG interpolation: 'CO2_only', 'CO2_CH4_NO2'
+    CHARACTER(LEN=256)  :: choice_CO2_relationship_config               = ''                               ! Options: 'relationship1', 'relationship2', 'relationship3'
+    LOGICAL             :: clamp_weights_config                         = .TRUE.                           ! Clamp weights to allow for colder or warmer than snapshot conditions
+    REAL(dp)            :: clamp_cutoff_low_config                      = 0.0_dp
+    REAL(dp)            :: clamp_cutoff_high_config                     = 1.0_dp
 
-    ! Paths to files containing fields for matrix ocean
+    ! Paths to files containing fields for matrix ocean linear time interpolation
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1_config            = ''
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2_config            = ''
 
@@ -1676,6 +1681,11 @@ MODULE model_configuration
 
     ! Choice of matrix ocean model
     CHARACTER(LEN=256)  :: choice_ocean_model_matrix
+    CHARACTER(LEN=256)  :: choice_ghg_inclusion
+    CHARACTER(LEN=256)  :: choice_CO2_relationship
+    LOGICAL             :: clamp_weights
+    REAL(dp)            :: clamp_cutoff_low
+    REAL(dp)            :: clamp_cutoff_high
 
     ! Paths to files containing fields for matrix ocean
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1  
@@ -2623,6 +2633,11 @@ CONTAINS
       ocean_tanh_thermocline_depth_config                         , &
       choice_ocean_model_realistic_config                         , &
       choice_ocean_model_matrix_config                            , &
+      choice_ghg_inclusion_config                                 , &
+      choice_CO2_relationship_config                              , &
+      clamp_weights_config                                        , &
+      clamp_cutoff_low_config                                     , &
+      clamp_cutoff_high_config                                    , &
       filename_ocean_matrix_base1_config                          , &
       filename_ocean_matrix_base2_config                          , &
       filename_ocean_snapshot_NAM_config                          , &
@@ -3529,6 +3544,11 @@ CONTAINS
 
     ! Choice of matrix ocean model
     C%choice_ocean_model_matrix                              = choice_ocean_model_matrix_config
+    C%choice_ghg_inclusion                                   = choice_ghg_inclusion_config
+    C%choice_CO2_relationship                                = choice_CO2_relationship_config
+    C%clamp_weights                                          = clamp_weights_config
+    C%clamp_cutoff_low                                       = clamp_cutoff_low_config
+    C%clamp_cutoff_high                                      = clamp_cutoff_high_config
 
     ! Paths to files containing fields for matrix ocean
     C%filename_ocean_matrix_base1                            = filename_ocean_matrix_base1_config
