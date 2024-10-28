@@ -8,7 +8,7 @@ MODULE ocean_matrix
   ! List of forcing:
   ! GHG concentrations (CO2, CH4, N2O) https://www.ipcc.ch/site/assets/uploads/2018/03/TAR-06.pdf
   ! Insolation variation
-  ! Ocean circulation (?) https://cp.copernicus.org/articles/19/1081/2023/cp-19-1081-2023.pdf  CH4 and AMOC (?)
+  ! Ocean circulation (?) https://cp.copernicus.org/articles/19/1081/2023/cp-19-1081-2023.pdf  CH4 and Antarctic Circumpolar Current (ACC) (?)
   ! Freshwater flux
   ! T and S relationship (empirical relation?)
 
@@ -36,6 +36,109 @@ MODULE ocean_matrix
   ! ===== Main routines =====
   ! =========================
 
+  SUBROUTINE interpolation_with_insolation(mesh, ocean, matrix, time)
+    ! Linear interpolation forcing based on insolation values
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
+    REAL(dp),                               INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_insolation'
+    REAL(dp)                                              :: w_ins
+    INTEGER                                               :: i, j
+    REAL(dp)                                              :: ins_current, ins_PI, ins_LGM
+    !REAL(dp), PARAMETER                                   :: ins_PI = 440.0_dp
+    !REAL(dp), PARAMETER                                   :: ins_LGM = 70.0_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
+    CALL get_insolation(time, ins_current)
+    CALL get_insolation(0.0_dp, ins_PI) ! Should actually be 100.0_dp, but insolation solution is in ka
+    CALL get_insolation(21000.0_dp, ins_LGM)
+
+    ! Compute w_ins
+    w_ins = (ins_current - ins_LGM) / (ins_PI - ins_LGM)
+
+    ! Clamp between cutoff values if enabled
+    IF (C%clamp_weights) THEN
+        w_ins = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_ins))
+    END IF
+
+    ! Apply interpolation using w_ins
+    DO i = mesh%vi1, mesh%vi2
+        DO j = 1, C%nz_ocean
+            ocean%T(i,j) = w_ins * matrix%timeframe1%T(i,j) + (1.0_dp - w_ins) * matrix%timeframe0%T(i,j)
+            ocean%S(i,j) = w_ins * matrix%timeframe1%S(i,j) + (1.0_dp - w_ins) * matrix%timeframe0%S(i,j)
+        END DO
+    END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE interpolation_with_insolation
+
+  SUBROUTINE get_insolation(time, ins_current)
+    ! Get insolation values at the given time
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    REAL(dp), INTENT(IN)                                  :: time
+    REAL(dp), INTENT(OUT)                                 :: ins_current
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'get_insolation'
+    INTEGER, PARAMETER                                    :: num_points = 22
+    REAL(dp), DIMENSION(num_points)                       :: age_data
+    REAL(dp), DIMENSION(num_points)                       :: ins_data
+    INTEGER                                               :: i
+    LOGICAL                                               :: found
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! FIX
+    ! Hardcoded values for now, should be reading in from csv
+    
+    ! Berger, A; Loutre, Marie-France (1999)
+    ! Initialize data arrays
+    age_data = (/ &
+    0.0_dp, 1000.0_dp, 2000.0_dp, 3000.0_dp, 4000.0_dp, 5000.0_dp, 6000.0_dp, 7000.0_dp, 8000.0_dp, 9000.0_dp, 10000.0_dp, 11000.0_dp, &
+    12000.0_dp, 13000.0_dp, 14000.0_dp, 15000.0_dp, 16000.0_dp, 17000.0_dp, 18000.0_dp, 19000.0_dp, 20000.0_dp, 21000.0_dp /)
+    
+    ins_data = (/ &
+	  426.76_dp, 430.12_dp, 434.69_dp, 440.20_dp, 446.28_dp, 452.48_dp, 458.31_dp, 463.29_dp, 467.00_dp, 469.12_dp, &
+    469.44_dp, 467.92_dp, 464.67_dp, 459.95_dp, 454.12_dp, 447.62_dp, 440.92_dp, 434.50_dp, 428.77_dp, 424.07_dp, &
+    420.64_dp, 418.62_dp /)
+
+    ! Initialize found flag
+    found = .FALSE.
+    
+    ! Search for the time in age_data
+    DO i = 1, num_points
+        IF (ABS(age_data(i) - time) < 1e-3_dp) THEN
+            ins_current = ins_data(i)
+            found = .TRUE.
+            EXIT
+        END IF
+    END DO
+    
+    IF (.NOT. found) THEN
+        CALL crash('Time value not found in age_data.')
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE get_insolation
+
   SUBROUTINE update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
     ! Update the ocean matrix timeframes
 
@@ -54,38 +157,10 @@ MODULE ocean_matrix
     !INTEGER                                               :: ndepth
     !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
 
+    ! FIX, prescribe updated ocean states to model
+
     ! Add routine to path
     CALL init_routine( routine_name)
-
-    ! For now, hardcode the years
-    matrix%t0 = REAL(C%start_time_of_run, dp)     ! LGM
-    matrix%t1 = REAL(C%end_time_of_run, dp)       ! PI
-
-    ! Possibility to hardcode the depth, should then be called in read_field_from_file_3D_ocean command
-    !ndepth = 11
-    !ALLOCATE(depth(ndepth))
-    !depth = (/0.0_dp, 150.0_dp, 300.0_dp, 450.0_dp, 600.0_dp, 750.0_dp, 900.0_dp, &
-              !1050.0_dp, 1200.0_dp, 1350.0_dp, 1500.0_dp/)
-
-    ! Allocate memory for timeframes' T and S array if not already allocated
-    IF (.NOT. ALLOCATED(matrix%timeframe0%T)) THEN
-      ALLOCATE(matrix%timeframe0%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-      ALLOCATE(matrix%timeframe0%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-    END IF
-    IF (.NOT. ALLOCATED(matrix%timeframe1%T)) THEN
-      ALLOCATE(matrix%timeframe1%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-      ALLOCATE(matrix%timeframe1%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))      
-    END IF
-
-    ! Construct filenames for the two ocean snapshots
-    filename1 = TRIM(C%filename_ocean_matrix_base1)
-    filename2 = TRIM(C%filename_ocean_matrix_base2)
-
-    ! Read the ocean snapshots
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, matrix%timeframe0%T)
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_S_ocean, mesh, matrix%timeframe0%S)
-    CALL read_field_from_file_3D_ocean(filename2, field_name_options_T_ocean, mesh, matrix%timeframe1%T)
-    CALL read_field_from_file_3D_ocean(filename2, field_name_options_S_ocean, mesh, matrix%timeframe1%S)
   
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -133,8 +208,8 @@ MODULE ocean_matrix
 
   END SUBROUTINE linear_time_interpolation
 
-  SUBROUTINE interpolation_with_GHG(mesh, ocean, matrix, time)
-    ! Linear interpolation between two ocean snapshots
+  SUBROUTINE interpolation_with_GHG_basic(mesh, ocean, matrix, time)
+    ! Linear interpolation forcing based on GHG
 
     IMPLICIT NONE
 
@@ -145,56 +220,149 @@ MODULE ocean_matrix
     REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_GHG'
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_GHG_basic'
+    REAL(dp)                                              :: w_GHG, w_GHG_CO2, w_GHG_CH4, w_GHG_N2O
+    INTEGER                                               :: i, j
+    REAL(dp)                                              :: CO2_current, CH4_current, N2O_current
+    REAL(dp)                                              :: CO2_PI, CH4_PI, N2O_PI
+    REAL(dp)                                              :: CO2_LGM, CH4_LGM, N2O_LGM
+    CHARACTER(LEN=256)                                    :: GHG_inclusion
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
+    CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
+    CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)
+    CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)
+
+    ! Get config settings
+    GHG_inclusion    = TRIM(C%choice_ghg_inclusion)
+
+    ! Compute weights based on GHG concentration ratios
+    ! w_CO2
+    IF (GHG_inclusion == 'CO2' .OR. GHG_inclusion == 'CO2_CH4' .OR. GHG_inclusion == 'CO2_CH4_N2O') THEN
+      w_GHG_CO2 = (CO2_current - CO2_LGM) / (CO2_PI - CO2_LGM)
+    ELSE
+        w_GHG_CO2 = 0.0_dp
+    END IF
+
+    ! w_CH4
+    IF (GHG_inclusion == 'CO2_CH4' .OR. GHG_inclusion == 'CO2_CH4_N2O') THEN
+        w_GHG_CH4 = (CH4_current - CH4_LGM) / (CH4_PI - CH4_LGM)
+    ELSE
+        w_GHG_CH4 = 0.0_dp
+    END IF
+
+    ! w_N2O
+    IF (GHG_inclusion == 'CO2_CH4_N2O') THEN
+        w_GHG_N2O = (N2O_current - N2O_LGM) / (N2O_PI - N2O_LGM)
+    ELSE
+        w_GHG_N2O = 0.0_dp
+    END IF
+
+    ! Combine weights based on selected GHGs
+    IF (GHG_inclusion == 'CO2') THEN
+        w_GHG = w_GHG_CO2
+    ELSE IF (GHG_inclusion == 'CO2_CH4') THEN
+        w_GHG = (w_GHG_CO2 + w_GHG_CH4) / 2.0_dp
+    ELSE IF (GHG_inclusion == 'CO2_CH4_N2O') THEN
+        w_GHG = (w_GHG_CO2 + w_GHG_CH4 + w_GHG_N2O) / 3.0_dp
+    ELSE
+        CALL crash('Unknown choice_ghg_inclusion: "' // TRIM(GHG_inclusion) // '"')
+    END IF
+
+    ! Clamp between cutoff values if enabled
+    IF (C%clamp_weights) THEN
+        w_GHG = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_GHG))
+    END IF
+
+    ! Apply interpolation using w_GHG
+    DO i = mesh%vi1, mesh%vi2
+        DO j = 1, C%nz_ocean
+            ocean%T(i,j) = w_GHG * matrix%timeframe1%T(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%T(i,j)
+            ocean%S(i,j) = w_GHG * matrix%timeframe1%S(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%S(i,j)
+        END DO
+    END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE interpolation_with_GHG_basic
+
+  SUBROUTINE interpolation_with_GHG_radiative(mesh, ocean, matrix, time)
+    ! Linear interpolation forcing based on GHG
+
+    IMPLICIT NONE
+
+    ! In- and output variables
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
+    REAL(dp),                               INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_GHG_radiative'
     REAL(dp)                                              :: w_GHG
     INTEGER                                               :: i, j
     REAL(dp)                                              :: CO2_current, CH4_current, N2O_current
-    REAL(dp)                                              :: DeltaF_CO2, DeltaF_CH4, DeltaF_N2O, DeltaF_total
+    REAL(dp)                                              :: CO2_PI, CH4_PI, N2O_PI
+    REAL(dp)                                              :: CO2_LGM, CH4_LGM, N2O_LGM
+    REAL(dp)                                              :: DeltaF_CO2, DeltaF_CH4, DeltaF_N2O
     REAL(dp)                                              :: DeltaF_CO2_PI, DeltaF_CH4_PI, DeltaF_N2O_PI
-    REAL(dp)                                              :: DeltaF_LGM, DeltaF_PI
-    REAL(dp), PARAMETER                                   :: CO2_LGM = 190.0_dp  ! ppm !FIX,for now hardcoded values
-    REAL(dp), PARAMETER                                   :: CO2_PI  = 280.0_dp  ! ppm
-    REAL(dp), PARAMETER                                   :: CH4_LGM = 350.0_dp  ! ppb
-    REAL(dp), PARAMETER                                   :: CH4_PI  = 720.0_dp  ! ppb
-    REAL(dp), PARAMETER                                   :: N2O_LGM = 200.0_dp  ! ppb
-    REAL(dp), PARAMETER                                   :: N2O_PI  = 270.0_dp  ! ppb
+    REAL(dp)                                              :: DeltaF_CO2_LGM, DeltaF_CH4_LGM, DeltaF_N2O_LGM
+    REAL(dp)                                              :: DeltaF_total, DeltaF_PI, DeltaF_LGM
     CHARACTER(LEN=256)                                    :: CO2_relationship
     CHARACTER(LEN=256)                                    :: GHG_inclusion
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Get current GHG concentrations (implement this function based on your data sources)
-    CALL get_current_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
+    ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
+    CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
+    CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)
+    CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)
 
     ! Get config settings
     GHG_inclusion    = TRIM(C%choice_ghg_inclusion)
     CO2_relationship = TRIM(C%choice_CO2_relationship)
 
-    ! Compute CO2
-    CALL compute_CO2_forcing(CO2_current, CO2_LGM, CO2_relationship, DeltaF_CO2)
-    DeltaF_total = DeltaF_CO2
+    ! Initialize DeltaFs
+    DeltaF_total = 0.0_dp
+    DeltaF_PI    = 0.0_dp
+    DeltaF_LGM   = 0.0_dp
 
-    ! Include CH4 and N2O if selected
-    IF (ghg_inclusion == 'CO2_CH4_N2O') THEN
-      ! Compute CH4 and N2O
-      CALL compute_CH4_N2O_forcing(CH4_current, CH4_LGM, N2O_current, N2O_LGM, DeltaF_CH4, DeltaF_N2O)
-      DeltaF_total = DeltaF_total + DeltaF_CH4 + DeltaF_N2O
+    ! Compute CO2 forcing
+    IF (ghg_inclusion == 'CO2' .OR. ghg_inclusion == 'CO2_CH4' .OR. ghg_inclusion == 'CO2_CH4_N2O') THEN
+      CALL compute_CO2_forcing(CO2_current, CO2_LGM, CO2_relationship, DeltaF_CO2)
+      CALL compute_CO2_forcing(CO2_PI,     CO2_LGM, CO2_relationship, DeltaF_CO2_PI)
+      CALL compute_CO2_forcing(CO2_LGM,    CO2_LGM, CO2_relationship, DeltaF_CO2_LGM) 
+
+      DeltaF_total = DeltaF_total + DeltaF_CO2
+      DeltaF_PI    = DeltaF_PI    + DeltaF_CO2_PI
+      DeltaF_LGM   = DeltaF_LGM   + DeltaF_CO2_LGM
     END IF
 
-    ! Compute DeltaF_LGM and DeltaF_PI for normalization
-    DeltaF_LGM = 0.0_dp  ! Reference at LGM
+    ! Include CH4 forcing if selected
+    IF (ghg_inclusion == 'CO2_CH4' .OR. ghg_inclusion == 'CO2_CH4_N2O') THEN
+      CALL compute_CH4_forcing(CH4_current, CH4_LGM, N2O_LGM, DeltaF_CH4)
+      CALL compute_CH4_forcing(CH4_PI,      CH4_LGM, N2O_LGM, DeltaF_CH4_PI)
+      CALL compute_CH4_forcing(CH4_LGM,     CH4_LGM, N2O_LGM, DeltaF_CH4_LGM)
 
-    ! Compute DeltaF at PI
-    ! Compute CO2
-    CALL compute_CO2_forcing(CO2_PI, CO2_LGM, CO2_relationship, DeltaF_CO2_PI)
-    DeltaF_PI = DeltaF_CO2_PI
+      DeltaF_total = DeltaF_total + DeltaF_CH4
+      DeltaF_PI    = DeltaF_PI    + DeltaF_CH4_PI
+      DeltaF_LGM   = DeltaF_LGM   + DeltaF_CH4_LGM
+    END IF
 
-    ! Include CH4 and N2O if selected
+    ! Include N2O forcing if selected
     IF (ghg_inclusion == 'CO2_CH4_N2O') THEN
-      ! Compute CH4 and N2O at PI
-      CALL compute_CH4_N2O_forcing(CH4_PI, CH4_LGM, N2O_PI, N2O_LGM, DeltaF_CH4_PI, DeltaF_N2O_PI)
-      DeltaF_PI = DeltaF_PI + DeltaF_CH4_PI + DeltaF_N2O_PI
+      CALL compute_N2O_forcing(N2O_current, N2O_LGM, CH4_LGM, DeltaF_N2O)
+      CALL compute_N2O_forcing(N2O_PI,      N2O_LGM, CH4_LGM, DeltaF_N2O_PI)
+      CALL compute_N2O_forcing(N2O_LGM,     N2O_LGM, CH4_LGM, DeltaF_N2O_LGM)
+
+      DeltaF_total = DeltaF_total + DeltaF_N2O
+      DeltaF_PI    = DeltaF_PI    + DeltaF_N2O_PI
+      DeltaF_LGM   = DeltaF_LGM   + DeltaF_N2O_LGM
     END IF
 
     ! Compute w_GHG
@@ -202,24 +370,24 @@ MODULE ocean_matrix
 
     ! Clamp between cutoff values if enabled
     IF (C%clamp_weights) THEN
-      w_GHG = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_GHG))
+        w_GHG = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_GHG))
     END IF
 
     ! Apply interpolation using w_GHG
     DO i = mesh%vi1, mesh%vi2
-      DO j = 1, C%nz_ocean
-        ocean%T(i,j) = w_GHG * matrix%timeframe1%T(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%T(i,j)
-        ocean%S(i,j) = w_GHG * matrix%timeframe1%S(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%S(i,j)
-      END DO
+        DO j = 1, C%nz_ocean
+            ocean%T(i,j) = w_GHG * matrix%timeframe1%T(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%T(i,j)
+            ocean%S(i,j) = w_GHG * matrix%timeframe1%S(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%S(i,j)
+        END DO
     END DO
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE interpolation_with_GHG
+  END SUBROUTINE interpolation_with_GHG_radiative
 
-  SUBROUTINE get_current_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
-    ! Get current GHG concentrations at the given time
+  SUBROUTINE get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
+    ! Get GHG concentrations at the given time
 
     IMPLICIT NONE
 
@@ -230,20 +398,22 @@ MODULE ocean_matrix
     REAL(dp), INTENT(OUT)                                 :: N2O_current
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'get_current_GHG_concentrations'
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'get_GHG_concentrations'
     INTEGER, PARAMETER                                    :: num_points = 373
     REAL(dp), DIMENSION(num_points)                       :: age_data
     REAL(dp), DIMENSION(num_points)                       :: CO2_data
     REAL(dp), DIMENSION(num_points)                       :: CH4_data
     REAL(dp), DIMENSION(num_points)                       :: N2O_data
+    INTEGER                                               :: i
+    LOGICAL                                               :: found
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! FIX
-    ! Hardcoded values for now
+    ! Hardcoded values for now, should be reading in from csv
+    
     ! Initialize data arrays
-
     age_data = (/ &
     0.0_dp, 100.0_dp, 137.0_dp, 148.0_dp, 212.0_dp, 268.0_dp, 279.0_dp, 280.0_dp, 395.0_dp, 400.0_dp, &
     404.0_dp, 485.0_dp, 513.0_dp, 559.0_dp, 572.0_dp, 672.0_dp, 677.0_dp, 754.0_dp, 768.0_dp, 769.0_dp, &
@@ -404,10 +574,28 @@ MODULE ocean_matrix
     231.1270073_dp, 221.7_dp, 238.9108696_dp, 242.0_dp, 242.3198276_dp, 242.3781609_dp, 242.695977_dp, 242.7_dp, 266.5167421_dp, 279.0_dp, &
     257.1518519_dp, 244.3_dp, 233.8079646_dp /)
 
+    ! Initialize found flag
+    found = .FALSE.
+    
+    ! Search for the time in age_data
+    DO i = 1, num_points
+        IF (ABS(age_data(i) - time) < 1e-3_dp) THEN
+            CO2_current = CO2_data(i)
+            CH4_current = CH4_data(i)
+            N2O_current = N2O_data(i)
+            found = .TRUE.
+            EXIT
+        END IF
+    END DO
+    
+    IF (.NOT. found) THEN
+        CALL crash('Time value not found in age_data.')
+    END IF
+
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE get_current_GHG_concentrations
+  END SUBROUTINE get_GHG_concentrations
 
   SUBROUTINE compute_CO2_forcing(CO2_current, CO2_ref, CO2_relationship, DeltaF_CO2)
     ! Compute radiative forcing due to CO2 using specified relationship
@@ -416,7 +604,7 @@ MODULE ocean_matrix
 
     ! Input variables
     REAL(dp), INTENT(IN)                                  :: CO2_current       ! Current CO2 concentration (ppm)
-    REAL(dp), INTENT(IN)                                  :: CO2_ref           ! Reference CO2 concentration (ppm)
+    REAL(dp), INTENT(IN)                                  :: CO2_ref           ! LGM CO2 concentration (ppm)
     CHARACTER(LEN=256), INTENT(IN)                        :: CO2_relationship  ! Relationship to use ('relationship1', etc.)
     REAL(dp), INTENT(OUT)                                 :: DeltaF_CO2        ! Radiative forcing due to CO2
 
@@ -432,18 +620,18 @@ MODULE ocean_matrix
     SELECT CASE (CO2_relationship)
 
     CASE ('relationship1')
-      ! ∆F = α ln(C/C0)
+      ! ∆F= α ln(C/C0)
       alpha = 5.35_dp
       DeltaF_CO2 = alpha * LOG(CO2_current / CO2_ref)
       
     CASE ('relationship2')
-      ! ∆F = α ln(C/C0) + β(√C − √C0)
+      ! ∆F= α ln(C/C0) + β(√C − √C0)
       alpha = 4.841_dp
       beta = 0.0906_dp
       DeltaF_CO2 = alpha * LOG(CO2_current / CO2_ref) + beta * (SQRT(CO2_current) - SQRT(CO2_ref))
     
     CASE ('relationship3')
-      ! ∆F = α(g(C) – g(C0)), where g(C) = ln(1 + 1.2C + 0.005C² + 1.4 × 10⁻⁶C³)
+      ! ∆F= α(g(C)–g(C0)), where g(C) = ln(1 + 1.2C + 0.005C² + 1.4 × 10⁻⁶C³)
       alpha = 3.35_dp
       g_current = LOG(1.0_dp + 1.2_dp*CO2_current + 0.005_dp*CO2_current**2 + 1.4e-6_dp*CO2_current**3)
       g_ref = LOG(1.0_dp + 1.2_dp*CO2_ref + 0.005_dp*CO2_ref**2 + 1.4e-6_dp*CO2_ref**3)
@@ -485,43 +673,59 @@ MODULE ocean_matrix
 
   END FUNCTION f_overlap
 
-  SUBROUTINE compute_CH4_N2O_forcing(M, M0, N, N0, DeltaF_CH4, DeltaF_N2O)
+  SUBROUTINE compute_CH4_forcing(M, M0, N0, DeltaF_CH4)
     ! Compute radiative forcing contributions from CH4 and N2O
     
     IMPLICIT NONE
 
     ! In/output variables:
     REAL(dp), INTENT(IN)                                  :: M            ! CH4 concentration (ppb)
-    REAL(dp), INTENT(IN)                                  :: M0           ! Reference CH4 concentration (ppb)
-    REAL(dp), INTENT(IN)                                  :: N            ! N2O concentration (ppb)
-    REAL(dp), INTENT(IN)                                  :: N0           ! Reference N2O concentration (ppb)
+    REAL(dp), INTENT(IN)                                  :: M0           ! LGM CH4 concentration (ppb)
+    REAL(dp), INTENT(IN)                                  :: N0           ! LGM N2O concentration (ppb)
     REAL(dp), INTENT(OUT)                                 :: DeltaF_CH4   ! Radiative forcing due to CH4
-    REAL(dp), INTENT(OUT)                                 :: DeltaF_N2O   ! Radiative forcing due to N2O
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'compute_CH4_N2O_forcing'
     REAL(dp), PARAMETER                                   :: alpha_CH4 = 0.036_dp
-    REAL(dp), PARAMETER                                   :: alpha_N2O = 0.12_dp
-    REAL(dp)                                              :: f_CH4_current, f_CH4_ref
-    REAL(dp)                                              :: f_N2O_current, f_N2O_ref
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! Compute DeltaF_CH4
-    f_CH4_current = f_overlap(M, N0)
-    f_CH4_ref     = f_overlap(M0, N0)
-    DeltaF_CH4 = alpha_CH4 * (SQRT(M) - SQRT(M0)) - (f_CH4_current - f_CH4_ref)
-
-    ! Compute DeltaF_N2O
-    f_N2O_current = f_overlap(M0, N)
-    f_N2O_ref     = f_overlap(M0, N0)
-    DeltaF_N2O = alpha_N2O * (SQRT(N) - SQRT(N0)) - (f_N2O_current - f_N2O_ref)
+    ! ∆F= α(√M–√M0)–(f(M,N0)–f(M0,N0))
+    DeltaF_CH4 = alpha_CH4 * (SQRT(M) - SQRT(M0)) - (f_overlap(M, N0) - f_overlap(M0, N0))
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
-  END SUBROUTINE compute_CH4_N2O_forcing
+  END SUBROUTINE compute_CH4_forcing
+
+  SUBROUTINE compute_N2O_forcing(N, N0, M0, DeltaF_N2O)
+    ! Compute radiative forcing contributions from N2O
+    
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), INTENT(IN)                                  :: M0           ! LGM CH4 concentration (ppb)
+    REAL(dp), INTENT(IN)                                  :: N            ! N2O concentration (ppb)
+    REAL(dp), INTENT(IN)                                  :: N0           ! LGM N2O concentration (ppb)
+    REAL(dp), INTENT(OUT)                                 :: DeltaF_N2O   ! Radiative forcing due to N2O
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'compute_CH4_N2O_forcing'
+    REAL(dp), PARAMETER                                   :: alpha_N2O = 0.12_dp
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Compute DeltaF_N2O
+    ! ∆F= α(√N–√N0)–(f(M0,N)–f(M0,N 0))
+    DeltaF_N2O = alpha_N2O * (SQRT(N) - SQRT(N0)) - (f_overlap(M0, N) - f_overlap(M0, N0))
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE compute_N2O_forcing
 
   !SUBROUTINE polynomial_time_interpolation(mesh, ocean, time, num_timeframes, times, weights)
     ! Polynomial interpolation (Lagrange)
@@ -626,12 +830,7 @@ MODULE ocean_matrix
     ! Update timeframes if necessary
     IF (time < matrix%t0 .OR. time > matrix%t1) THEN
       CALL update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
-    END IF
-    
-    !PRINT *, 'After timeframe update:'
-    !PRINT *, 'Time:', time
-    !PRINT *, 'matrix%t0:', matrix%t0
-    !PRINT *, 'matrix%t1:', matrix%t1    
+    END IF   
 
     ! Minimum required amount of timeframes for each linear time interpolation method
     !IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
@@ -646,10 +845,12 @@ MODULE ocean_matrix
       CALL linear_time_interpolation(mesh, ocean, matrix, time)
     ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial_time') THEN
         CALL crash('Polynomial interpolation not implemented yet')
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_radiative_based') THEN
+      CALL interpolation_with_GHG_radiative(mesh, ocean, matrix, time)
     ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_based') THEN
-      CALL interpolation_with_GHG(mesh, ocean, matrix, time)
-    !ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'Insolation') THEN
-      !CALL interpolation_with_Insolation(mesh, ocean, matrix, time)
+      CALL interpolation_with_GHG_basic(mesh, ocean, matrix, time)
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation') THEN
+      CALL interpolation_with_insolation(mesh, ocean, matrix, time)
     ELSE
         CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
@@ -672,6 +873,9 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model_matrix'
     TYPE(type_ocean_matrix_interpolation)                 :: matrix
+    CHARACTER(LEN=256)                                    :: filename1, filename2
+    !INTEGER                                               :: ndepth
+    !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -680,12 +884,49 @@ MODULE ocean_matrix
     IF (par%master)  WRITE(*,"(A)") '     Initialising matrix ocean model "' // &
       colour_string( TRIM( C%choice_ocean_model_matrix),'light blue') // '"...'
 
-    ! Run the chosen matrix ocean model
+    ! Start and ending of simulation
+    matrix%t0 = REAL(C%start_time_of_run, dp)     ! LGM
+    matrix%t1 = REAL(C%end_time_of_run, dp)       ! PI
+
+    ! Possibility to hardcode the depth, should then be called in read_field_from_file_3D_ocean command
+    !ndepth = 11
+    !ALLOCATE(depth(ndepth))
+    !depth = (/0.0_dp, 150.0_dp, 300.0_dp, 450.0_dp, 600.0_dp, 750.0_dp, 900.0_dp, &
+              !1050.0_dp, 1200.0_dp, 1350.0_dp, 1500.0_dp/)
+
+    ! Allocate memory for timeframes' T and S array if not already allocated
+    IF (.NOT. ALLOCATED(matrix%timeframe0%T)) THEN
+      ALLOCATE(matrix%timeframe0%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
+      ALLOCATE(matrix%timeframe0%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
+    END IF
+    IF (.NOT. ALLOCATED(matrix%timeframe1%T)) THEN
+      ALLOCATE(matrix%timeframe1%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
+      ALLOCATE(matrix%timeframe1%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))      
+    END IF
+
+    ! Construct filenames for the two ocean snapshots
+    filename1 = TRIM(C%filename_ocean_matrix_base1)
+    filename2 = TRIM(C%filename_ocean_matrix_base2)
+
+    ! Read the ocean snapshots
+    CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, matrix%timeframe0%T)
+    CALL read_field_from_file_3D_ocean(filename1, field_name_options_S_ocean, mesh, matrix%timeframe0%S)
+    CALL read_field_from_file_3D_ocean(filename2, field_name_options_T_ocean, mesh, matrix%timeframe1%T)
+    CALL read_field_from_file_3D_ocean(filename2, field_name_options_S_ocean, mesh, matrix%timeframe1%S)
+
+    ! Ensure correct model choice
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
-      ! For linear interpolation, no initialisation is required here
-      ! Timeframes will be updated when `run_ocean_model_matrix` is called
+      ! Check
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial_time') THEN
+      CALL crash('Polynomial interpolation not implemented yet')
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_radiative_based') THEN
+      ! Check
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_based') THEN
+      ! Check
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation') THEN
+      ! Check
     ELSE
-      CALL crash('Unknown choice_ocean_model_matrix: "' // TRIM(C%choice_ocean_model_matrix) // '"')
+      CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
   
     ! Finalise routine path
