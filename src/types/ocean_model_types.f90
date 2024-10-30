@@ -48,6 +48,9 @@ MODULE ocean_model_types
     ! Timestepping
     REAL(dp)                                :: t_next
 
+    ! Matrix component
+    TYPE(type_ocean_matrix_interpolation)   :: matrix
+
   END TYPE type_ocean_model
 
 CONTAINS

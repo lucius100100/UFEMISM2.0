@@ -12,7 +12,6 @@ MODULE ocean_matrix
   ! Freshwater flux
   ! T and S relationship (empirical relation?)
 
-
     ! Matrix ocean models
   
   ! ===== Preamble =====
@@ -74,8 +73,8 @@ MODULE ocean_matrix
     ! Apply interpolation using w_ins
     DO i = mesh%vi1, mesh%vi2
         DO j = 1, C%nz_ocean
-            ocean%T(i,j) = w_ins * matrix%timeframe1%T(i,j) + (1.0_dp - w_ins) * matrix%timeframe0%T(i,j)
-            ocean%S(i,j) = w_ins * matrix%timeframe1%S(i,j) + (1.0_dp - w_ins) * matrix%timeframe0%S(i,j)
+            ocean%T(i,j) = w_ins * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_ins) * ocean%matrix%timeframe0%T(i,j)
+            ocean%S(i,j) = w_ins * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_ins) * ocean%matrix%timeframe0%S(i,j)
         END DO
     END DO
 
@@ -139,33 +138,33 @@ MODULE ocean_matrix
 
   END SUBROUTINE get_insolation
 
-  SUBROUTINE update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
+  !SUBROUTINE update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
     ! Update the ocean matrix timeframes
 
-    IMPLICIT NONE
+    !IMPLICIT NONE
 
     ! In/output variables:
-    TYPE(type_mesh),                        INTENT(IN)    :: mesh
-    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
-    TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
-    CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
-    REAL(dp),                               INTENT(IN)    :: time
+    !TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    !TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    !TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
+    !CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
+    !REAL(dp),                               INTENT(IN)    :: time
 
     ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'update_ocean_matrix_timeframes'
-    CHARACTER(LEN=256)                                    :: filename1, filename2
+    !CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'update_ocean_matrix_timeframes'
+    !CHARACTER(LEN=256)                                    :: filename1, filename2
     !INTEGER                                               :: ndepth
     !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
 
     ! FIX, prescribe updated ocean states to model
 
     ! Add routine to path
-    CALL init_routine( routine_name)
+    !CALL init_routine( routine_name)
   
     ! Finalise routine path
-    CALL finalise_routine( routine_name)
+    !CALL finalise_routine( routine_name)
 
-  END SUBROUTINE update_ocean_matrix_timeframes
+  !END SUBROUTINE update_ocean_matrix_timeframes
 
   SUBROUTINE linear_time_interpolation(mesh, ocean, matrix, time)
     ! Linear interpolation between two ocean snapshots
@@ -193,13 +192,13 @@ MODULE ocean_matrix
     ! Apply linear interpolation
     DO i = mesh%vi1, mesh%vi2
         DO j = 1, C%nz_ocean
-            ocean%T(i,j) = wt0 * matrix%timeframe0%T(i,j) + wt1 * matrix%timeframe1%T(i,j)
-            ocean%S(i,j) = wt0 * matrix%timeframe0%S(i,j) + wt1 * matrix%timeframe1%S(i,j)
+            ocean%T(i,j) = wt0 * ocean%matrix%timeframe0%T(i,j) + wt1 * ocean%matrix%timeframe1%T(i,j)
+            ocean%S(i,j) = wt0 * ocean%matrix%timeframe0%S(i,j) + wt1 * ocean%matrix%timeframe1%S(i,j)
         END DO
     END DO
     
     ! Check for division by 0 error
-    !IF (ABS(matrix%t1 - matrix%t0) < 1e-5_dp) THEN
+    !IF (ABS(ocean%matrix%t1 - ocean%matrix%t0) < 1e-5_dp) THEN
       !CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
     !END IF
 
@@ -280,8 +279,8 @@ MODULE ocean_matrix
     ! Apply interpolation using w_GHG
     DO i = mesh%vi1, mesh%vi2
         DO j = 1, C%nz_ocean
-            ocean%T(i,j) = w_GHG * matrix%timeframe1%T(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%T(i,j)
-            ocean%S(i,j) = w_GHG * matrix%timeframe1%S(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%S(i,j)
+            ocean%T(i,j) = w_GHG * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_GHG) * ocean%matrix%timeframe0%T(i,j)
+            ocean%S(i,j) = w_GHG * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_GHG) * ocean%matrix%timeframe0%S(i,j)
         END DO
     END DO
 
@@ -376,8 +375,8 @@ MODULE ocean_matrix
     ! Apply interpolation using w_GHG
     DO i = mesh%vi1, mesh%vi2
         DO j = 1, C%nz_ocean
-            ocean%T(i,j) = w_GHG * matrix%timeframe1%T(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%T(i,j)
-            ocean%S(i,j) = w_GHG * matrix%timeframe1%S(i,j) + (1.0_dp - w_GHG) * matrix%timeframe0%S(i,j)
+            ocean%T(i,j) = w_GHG * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_GHG) * ocean%matrix%timeframe0%T(i,j)
+            ocean%S(i,j) = w_GHG * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_GHG) * ocean%matrix%timeframe0%S(i,j)
         END DO
     END DO
 
@@ -768,32 +767,32 @@ MODULE ocean_matrix
 
           ! Sum the contributions from each available timeframe
           !n = 0
-          !IF (ALLOCATED(matrix%timeframe0%T)) THEN
+          !IF (ALLOCATED(ocean%matrix%timeframe0%T)) THEN
               !n = n + 1
               !IF (n <= num_timeframes) THEN
-                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * matrix%timeframe0%T(i, j)
-                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * matrix%timeframe0%S(i, j)
+                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe0%T(i, j)
+                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe0%S(i, j)
               !END IF
           !END IF
-          !IF (ALLOCATED(matrix%timeframe1%T)) THEN
+          !IF (ALLOCATED(ocean%matrix%timeframe1%T)) THEN
               !n = n + 1
               !IF (n <= num_timeframes) THEN
-                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * matrix%timeframe1%T(i, j)
-                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * matrix%timeframe1%S(i, j)
+                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe1%T(i, j)
+                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe1%S(i, j)
               !END IF
           !END IF
-          !IF (ALLOCATED(matrix%timeframe2%T)) THEN
+          !IF (ALLOCATED(ocean%matrix%timeframe2%T)) THEN
               !n = n + 1
               !IF (n <= num_timeframes) THEN
-                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * matrix%timeframe2%T(i, j)
-                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * matrix%timeframe2%S(i, j)
+                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe2%T(i, j)
+                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe2%S(i, j)
               !END IF
           !END IF
-          !IF (ALLOCATED(matrix%timeframe3%T)) THEN
+          !IF (ALLOCATED(ocean%matrix%timeframe3%T)) THEN
             !n = n + 1
             !IF (n <= num_timeframes) THEN
-                !ocean%T(i, j) = ocean%T(i, j) + weights(n) * matrix%timeframe3%T(i, j)
-                !ocean%S(i, j) = ocean%S(i, j) + weights(n) * matrix%timeframe3%S(i, j)
+                !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe3%T(i, j)
+                !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe3%S(i, j)
             !END IF
           !END IF
           ! Limited polynomial order due to computational time
@@ -828,9 +827,9 @@ MODULE ocean_matrix
     CALL init_routine( routine_name)
   
     ! Update timeframes if necessary
-    IF (time < matrix%t0 .OR. time > matrix%t1) THEN
-      CALL update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
-    END IF   
+    !IF (time < matrix%t0 .OR. time > matrix%t1) THEN
+      !CALL update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
+    !END IF   
 
     ! Minimum required amount of timeframes for each linear time interpolation method
     !IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
@@ -872,7 +871,6 @@ MODULE ocean_matrix
   
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model_matrix'
-    TYPE(type_ocean_matrix_interpolation)                 :: matrix
     CHARACTER(LEN=256)                                    :: filename1, filename2
     !INTEGER                                               :: ndepth
     !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
@@ -885,8 +883,8 @@ MODULE ocean_matrix
       colour_string( TRIM( C%choice_ocean_model_matrix),'light blue') // '"...'
 
     ! Start and ending of simulation
-    matrix%t0 = REAL(C%start_time_of_run, dp)     ! LGM
-    matrix%t1 = REAL(C%end_time_of_run, dp)       ! PI
+    ocean%matrix%t0 = REAL(C%start_time_of_run, dp)     ! LGM
+    ocean%matrix%t1 = REAL(C%end_time_of_run, dp)       ! PI
 
     ! Possibility to hardcode the depth, should then be called in read_field_from_file_3D_ocean command
     !ndepth = 11
@@ -895,13 +893,13 @@ MODULE ocean_matrix
               !1050.0_dp, 1200.0_dp, 1350.0_dp, 1500.0_dp/)
 
     ! Allocate memory for timeframes' T and S array if not already allocated
-    IF (.NOT. ALLOCATED(matrix%timeframe0%T)) THEN
-      ALLOCATE(matrix%timeframe0%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-      ALLOCATE(matrix%timeframe0%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
+    IF (.NOT. ALLOCATED(ocean%matrix%timeframe0%T)) THEN
+      ALLOCATE(ocean%matrix%timeframe0%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
+      ALLOCATE(ocean%matrix%timeframe0%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
     END IF
-    IF (.NOT. ALLOCATED(matrix%timeframe1%T)) THEN
-      ALLOCATE(matrix%timeframe1%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-      ALLOCATE(matrix%timeframe1%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))      
+    IF (.NOT. ALLOCATED(ocean%matrix%timeframe1%T)) THEN
+      ALLOCATE(ocean%matrix%timeframe1%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
+      ALLOCATE(ocean%matrix%timeframe1%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))      
     END IF
 
     ! Construct filenames for the two ocean snapshots
@@ -909,10 +907,10 @@ MODULE ocean_matrix
     filename2 = TRIM(C%filename_ocean_matrix_base2)
 
     ! Read the ocean snapshots
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, matrix%timeframe0%T)
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_S_ocean, mesh, matrix%timeframe0%S)
-    CALL read_field_from_file_3D_ocean(filename2, field_name_options_T_ocean, mesh, matrix%timeframe1%T)
-    CALL read_field_from_file_3D_ocean(filename2, field_name_options_S_ocean, mesh, matrix%timeframe1%S)
+    CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, ocean%matrix%timeframe0%T)
+    CALL read_field_from_file_3D_ocean(filename1, field_name_options_S_ocean, mesh, ocean%matrix%timeframe0%S)
+    CALL read_field_from_file_3D_ocean(filename2, field_name_options_T_ocean, mesh, ocean%matrix%timeframe1%T)
+    CALL read_field_from_file_3D_ocean(filename2, field_name_options_S_ocean, mesh, ocean%matrix%timeframe1%S)
 
     ! Ensure correct model choice
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
