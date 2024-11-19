@@ -3,7 +3,7 @@ MODULE ocean_matrix
   ! Concept:
   ! w_GHG = w_CO2 + w_CH4 + w_N2O
   ! w_e = w_GHG + w_insolation
-  ! w_f = w_TS_relation + w_circulation
+  ! w_f = w_TS_relation + w_circulation ! Probably going to ignore this, too complicated to implement / outside scope of research / too little impact on outcome
 
   ! List of forcing:
   ! GHG concentrations (CO2, CH4, N2O) https://www.ipcc.ch/site/assets/uploads/2018/03/TAR-06.pdf
@@ -138,34 +138,6 @@ MODULE ocean_matrix
 
   END SUBROUTINE get_insolation
 
-  !SUBROUTINE update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
-    ! Update the ocean matrix timeframes
-
-    !IMPLICIT NONE
-
-    ! In/output variables:
-    !TYPE(type_mesh),                        INTENT(IN)    :: mesh
-    !TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
-    !TYPE(type_ocean_matrix_interpolation),  INTENT(INOUT) :: matrix
-    !CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
-    !REAL(dp),                               INTENT(IN)    :: time
-
-    ! Local variables:
-    !CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'update_ocean_matrix_timeframes'
-    !CHARACTER(LEN=256)                                    :: filename1, filename2
-    !INTEGER                                               :: ndepth
-    !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
-
-    ! FIX, prescribe updated ocean states to model
-
-    ! Add routine to path
-    !CALL init_routine( routine_name)
-  
-    ! Finalise routine path
-    !CALL finalise_routine( routine_name)
-
-  !END SUBROUTINE update_ocean_matrix_timeframes
-
   SUBROUTINE linear_time_interpolation(mesh, ocean, matrix, time)
     ! Linear interpolation between two ocean snapshots
 
@@ -186,7 +158,7 @@ MODULE ocean_matrix
     CALL init_routine( routine_name)
 
     ! Calculate weights for linear interpolation
-    wt0 = (matrix%t1 - time) / (matrix%t1 - matrix%t0)
+    wt0 = (ocean%matrix%t1 - time) / (ocean%matrix%t1 - ocean%matrix%t0)
     wt1 = 1.0_dp - wt0
 
     ! Apply linear interpolation
@@ -404,13 +376,16 @@ MODULE ocean_matrix
     REAL(dp), DIMENSION(num_points)                       :: CH4_data
     REAL(dp), DIMENSION(num_points)                       :: N2O_data
     INTEGER                                               :: i
-    LOGICAL                                               :: found
+    !LOGICAL                                               :: found
+    INTEGER                                               :: idx_low, idx_high
+    REAL(dp)                                              :: t_low, t_high, fraction
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
     ! FIX
     ! Hardcoded values for now, should be reading in from csv
+    ! https://stackoverflow.com/questions/8828377/reading-data-from-txt-file-in-fortran
     
     ! Initialize data arrays
     age_data = (/ &
@@ -574,22 +549,48 @@ MODULE ocean_matrix
     257.1518519_dp, 244.3_dp, 233.8079646_dp /)
 
     ! Initialize found flag
-    found = .FALSE.
+    !found = .FALSE.
     
-    ! Search for the time in age_data
-    DO i = 1, num_points
-        IF (ABS(age_data(i) - time) < 1e-3_dp) THEN
-            CO2_current = CO2_data(i)
-            CH4_current = CH4_data(i)
-            N2O_current = N2O_data(i)
-            found = .TRUE.
-            EXIT
-        END IF
-    END DO
-    
-    IF (.NOT. found) THEN
-        CALL crash('Time value not found in age_data.')
+    ! Find the two indices such that age_data(idx_low) <= time <= age_data(idx_high)
+    idx_low = -1
+    idx_high = -1
+
+    IF (time <= age_data(1)) THEN
+        ! Time is before the first data point
+        idx_low = 1
+        idx_high = 1
+    ELSE IF (time >= age_data(num_points)) THEN
+        ! Time is after the last data point
+        idx_low = num_points
+        idx_high = num_points
+    ELSE
+        ! Time is within the data range
+        DO i = 1, num_points - 1
+            IF (age_data(i) <= time .AND. time <= age_data(i+1)) THEN
+                idx_low = i
+                idx_high = i + 1
+                EXIT
+            END IF
+        END DO
     END IF
+
+    IF (idx_low == -1 .OR. idx_high == -1) THEN
+        CALL crash('Time value not within the range of age_data.')
+    END IF
+
+    t_low = age_data(idx_low)
+    t_high = age_data(idx_high)
+
+    IF (t_high == t_low) THEN
+        fraction = 0.0_dp
+    ELSE
+        fraction = (time - t_low) / (t_high - t_low)
+    END IF
+
+    ! Interpolate GHG concentrations
+    CO2_current = CO2_data(idx_low) + fraction * (CO2_data(idx_high) - CO2_data(idx_low))
+    CH4_current = CH4_data(idx_low) + fraction * (CH4_data(idx_high) - CH4_data(idx_low))
+    N2O_current = N2O_data(idx_low) + fraction * (N2O_data(idx_high) - N2O_data(idx_low))
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -824,12 +825,7 @@ MODULE ocean_matrix
     INTEGER                                               :: required_timeframes
 
     ! Add routine to path
-    CALL init_routine( routine_name)
-  
-    ! Update timeframes if necessary
-    !IF (time < matrix%t0 .OR. time > matrix%t1) THEN
-      !CALL update_ocean_matrix_timeframes(mesh, ocean, matrix, region_name, time)
-    !END IF   
+    CALL init_routine( routine_name) 
 
     ! Minimum required amount of timeframes for each linear time interpolation method
     !IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
@@ -872,6 +868,7 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model_matrix'
     CHARACTER(LEN=256)                                    :: filename1, filename2
+    INTEGER                                               :: i, j
     !INTEGER                                               :: ndepth
     !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
 
@@ -903,8 +900,8 @@ MODULE ocean_matrix
     END IF
 
     ! Construct filenames for the two ocean snapshots
-    filename1 = TRIM(C%filename_ocean_matrix_base1)
-    filename2 = TRIM(C%filename_ocean_matrix_base2)
+    filename1 = TRIM(C%filename_ocean_matrix_base1) ! LGM
+    filename2 = TRIM(C%filename_ocean_matrix_base2) ! PI
 
     ! Read the ocean snapshots
     CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, ocean%matrix%timeframe0%T)
@@ -926,6 +923,14 @@ MODULE ocean_matrix
     ELSE
       CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
+
+    ! Prescribe initial ocean state
+    DO i = mesh%vi1, mesh%vi2
+      DO j = 1, C%nz_ocean
+        ocean%T(i,j) = ocean%matrix%timeframe0%T(i,j)
+        ocean%S(i,j) = ocean%matrix%timeframe0%S(i,j)
+      END DO
+    END DO
   
     ! Finalise routine path
     CALL finalise_routine( routine_name)
