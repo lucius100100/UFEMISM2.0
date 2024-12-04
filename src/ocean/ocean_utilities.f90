@@ -18,6 +18,62 @@ MODULE ocean_utilities
 
 CONTAINS
 
+  SUBROUTINE debug_ocean_matrix_state(mesh, ocean, time)
+    ! Debugging subroutine, checking variable values
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),        INTENT(IN) :: mesh
+    TYPE(type_ocean_model), INTENT(IN) :: ocean
+    REAL(dp),               INTENT(IN) :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER      :: routine_name = 'debug_ocean_matrix_state'
+    INTEGER                            :: i, j
+    REAL(dp)                           :: temp_min, temp_max, temp_mean
+    REAL(dp)                           :: sal_min, sal_max, sal_mean
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    IF (.NOT. par%master) RETURN
+
+    ! Calculate statistics
+    temp_min  = MINVAL(ocean%T)
+    temp_max  = MAXVAL(ocean%T)
+    temp_mean = SUM(ocean%T) / SIZE(ocean%T)
+
+    sal_min   = MINVAL(ocean%S)
+    sal_max   = MAXVAL(ocean%S)
+    sal_mean  = SUM(ocean%S) / SIZE(ocean%S)
+
+    ! Print statements
+    WRITE(*, *) '=== Ocean Matrix State Debug ==='
+    WRITE(*, *) 'Current Time:', time
+    WRITE(*, *) 'Timeframe Bounds: ', ocean%matrix%t0, ' to ', ocean%matrix%t1
+    WRITE(*, *) 'Temperature Stats:'
+    WRITE(*, *) '  Min:  ', temp_min
+    WRITE(*, *) '  Max:  ', temp_max
+    WRITE(*, *) '  Mean: ', temp_mean
+    WRITE(*, *) 'Salinity Stats:'
+    WRITE(*, *) '  Min:  ', sal_min
+    WRITE(*, *) '  Max:  ', sal_max
+    WRITE(*, *) '  Mean: ', sal_mean
+
+    ! Print first specific grid point
+    DO i = mesh%vi1, MIN(mesh%vi1, mesh%vi2)
+        WRITE(*, *) 'Point ', i, ' Temperature Profile:'
+        DO j = 1, C%nz_ocean
+            WRITE(*, *) '  Level ', j, ': ', ocean%T(i,j)
+        END DO
+    END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)  
+
+  END SUBROUTINE debug_ocean_matrix_state
+
 ! ===== Mixed layer =====
 ! =======================
 

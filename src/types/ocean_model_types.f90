@@ -1,6 +1,7 @@
 MODULE ocean_model_types
 
   ! The different data types used in the ocean modules
+  ! 2D = (:), 3D = (:,:)
 
 ! ===== Preamble =====
 ! ====================
@@ -14,20 +15,29 @@ MODULE ocean_model_types
 
   TYPE type_timeframe
   
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: T                            ! Temperature array for this timeframe
-    REAL(dp), DIMENSION(:,:), ALLOCATABLE :: S                            ! Salinity array for this timeframe
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE   :: T                         ! Temperature array for this timeframe
+    REAL(dp), DIMENSION(:,:  ), ALLOCATABLE   :: S                         ! Salinity array for this timeframe
   
   END TYPE type_timeframe
 
   TYPE type_ocean_matrix_interpolation
 
     ! Time fields for interpolation
-    REAL(dp) :: t0                                                         ! Start time for interpolation
-    REAL(dp) :: t1                                                         ! End time for interpolation     
+    REAL(dp)                                :: t0                          ! Start time for interpolation
+    REAL(dp)                                :: t1                          ! End time for interpolation     
 
     ! Timeframes containing temperature and salinity data
-    TYPE(type_timeframe) :: timeframe0                                     ! LGM
-    TYPE(type_timeframe) :: timeframe1                                     ! PI                      
+    TYPE(type_timeframe)                    :: timeframe0                  ! LGM
+    TYPE(type_timeframe)                    :: timeframe1                  ! PI      
+    
+    ! Insolation field
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: Q_TOA                       ! [W/m^2]           Insolation field
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: Q_TOA_PI                    ! [W/m^2]           Insolation field PI
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: Q_TOA_LGM                   ! [W/m^2]           Insolation field LGM
+
+    ! Anomaly fields
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: tas                         ! [degrees Celsius] Temperature field
+    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: sos                         ! [PSU]             Salinity field
 
   END TYPE type_ocean_matrix_interpolation
 

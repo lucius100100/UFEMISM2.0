@@ -4,7 +4,7 @@ function plot_mesh_test
     clear all
     close all
     
-    filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_ant_template_linear_time\main_output_ANT_00001.nc";
+    filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_ant_template_anomaly_field\main_output_ANT_00001.nc";
     
     mesh = read_mesh_from_file(filename);
     % plot_mesh(mesh);
@@ -12,7 +12,7 @@ function plot_mesh_test
     Hs = ncread(filename, 'Hs');
     
     plot_mesh_data(mesh, Hs(:, 11) - Hs(:,1));
-    plot_mesh_data(mesh, Hs(:));
+    %plot_mesh_data(mesh, Hs(:, 1));
     
     % diff = Hs(:,11) - Hs(:,1);
     

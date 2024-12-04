@@ -700,7 +700,7 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_ocean_snapshot_ANT_config           = ''
 
     ! Choice of matrix ocean model
-    CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = ''                               ! Choice of interpolation: "linear_time", "GHG_radiative_based", "GHG_based", "insolation"
+    CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = ''                               ! Choice of interpolation: "linear_time", "GHG_radiative_based", "GHG_based", "insolation", "d18O"
     CHARACTER(LEN=256)  :: choice_ghg_inclusion_config                  = ''                               ! Choice of GHG interpolation: "CO2", "CO2_CH4" ,"CO2_CH4_N2O"
     CHARACTER(LEN=256)  :: choice_CO2_relationship_config               = ''                               ! Options: "relationship1", "relationship2", "relationship3"
     LOGICAL             :: clamp_weights_config                         = .FALSE.                          ! Clamp weights to allow for colder or warmer than snapshot conditions: ".TRUE.", ".FALSE."
@@ -708,8 +708,22 @@ MODULE model_configuration
     REAL(dp)            :: clamp_cutoff_high_config                     = 1._dp
 
     ! Paths to files containing fields for matrix ocean linear time interpolation
-    CHARACTER(LEN=256)  :: filename_ocean_matrix_base1_config            = ''
-    CHARACTER(LEN=256)  :: filename_ocean_matrix_base2_config            = ''
+    CHARACTER(LEN=256)  :: filename_ocean_matrix_base1_config           = ''
+    CHARACTER(LEN=256)  :: filename_ocean_matrix_base2_config           = ''
+
+    ! Insolation forcing (NetCDF)
+    CHARACTER(LEN=256)  :: choice_insolation_forcing_config             = ''                               ! Choice of insolation forcing: "none", "static", "realistic"
+    REAL(dp)            :: static_insolation_time_config                = 0._dp                            ! Keep insolation values fixed to this time when choice_insolation_forcing = 'static'
+    CHARACTER(LEN=256)  :: filename_insolation_config                   = ''
+
+    ! Anomaly fields
+    CHARACTER(LEN=256)  :: filename_tas_config                          = ''                               
+    CHARACTER(LEN=256)  :: filename_sos_config                          = ''
+
+    ! d18O isotope
+    CHARACTER(LEN=256)  :: filename_d18O_record_config                  = ''
+    REAL(dp)            :: scale_d18O_temperature_config                = 0.01_dp                          ! Scaling factors d18O on temperature (0.01 standard)
+    REAL(dp)            :: scale_d18O_salinity_config                   = -0.005_dp                        ! Scaling factors d18O on salinity    (-0.005 standard)
 
   ! == Surface mass balance
   ! =======================
@@ -1691,6 +1705,20 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1  
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2 
 
+    ! Insolation forcing (NetCDF)
+    CHARACTER(LEN=256)  :: choice_insolation_forcing 
+    REAL(dp)            :: static_insolation_time   
+    CHARACTER(LEN=256)  :: filename_insolation     
+    
+    ! Anomaly fields
+    CHARACTER(LEN=256)  :: filename_tas                               
+    CHARACTER(LEN=256)  :: filename_sos
+
+    ! d18O isotope
+    CHARACTER(LEN=256)  :: filename_d18O_record
+    REAL(dp)            :: scale_d18O_temperature 
+    REAL(dp)            :: scale_d18O_salinity   
+
   ! == Surface mass balance
   ! =======================
 
@@ -2644,6 +2672,14 @@ CONTAINS
       clamp_cutoff_high_config                                    , &
       filename_ocean_matrix_base1_config                          , &
       filename_ocean_matrix_base2_config                          , &
+      choice_insolation_forcing_config                            , &
+      static_insolation_time_config                               , &   
+      filename_insolation_config                                  , & 
+      filename_tas_config                                         , &
+      filename_sos_config                                         , &
+      filename_d18O_record_config                                 , &
+      scale_d18O_temperature_config                               , &
+      scale_d18O_salinity_config                                  , &
       do_asynchronous_SMB_config                                  , &
       dt_SMB_config                                               , &
       do_SMB_removal_icefree_land_config                          , &
@@ -3553,6 +3589,20 @@ CONTAINS
     ! Paths to files containing fields for matrix ocean
     C%filename_ocean_matrix_base1                            = filename_ocean_matrix_base1_config
     C%filename_ocean_matrix_base2                            = filename_ocean_matrix_base2_config
+
+    ! Insolation forcing (NetCDF)
+    C%choice_insolation_forcing                              = choice_insolation_forcing_config
+    C%static_insolation_time                                 = static_insolation_time_config
+    C%filename_insolation                                    = filename_insolation_config
+
+    ! Anomaly field
+    C%filename_tas                                           = filename_tas_config
+    C%filename_sos                                           = filename_sos_config 
+
+    ! d18O isotope
+    C%filename_d18O_record                                   = filename_d18O_record_config
+    C%scale_d18O_temperature                                 = scale_d18O_temperature_config                 
+    C%scale_d18O_salinity                                    = scale_d18O_salinity_config                         
 
   ! == Surface mass balance
   ! =======================

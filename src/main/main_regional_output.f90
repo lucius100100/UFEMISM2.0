@@ -1233,9 +1233,9 @@ CONTAINS
 
       ! Main ocean variables
       CASE ('T_ocean')
-        CALL warning('ocean temperature not implemented yet!')
+        !CALL warning('ocean temperature not implemented yet!')
       CASE ('S_ocean')
-        CALL warning('ocean salinity not implemented yet!')
+        !CALL warning('ocean salinity not implemented yet!')
 
     ! == Surface mass balance ==
     ! ==========================
@@ -2446,9 +2446,9 @@ CONTAINS
 
       ! Main ocean variables
       CASE ('T_ocean')
-        CALL warning('ocean temperature not implemented yet!')
+        !CALL warning('ocean temperature not implemented yet!')
       CASE ('S_ocean')
-        CALL warning('ocean salinity not implemented yet!')
+        !CALL warning('ocean salinity not implemented yet!')
 
     ! == Surface mass balance ==
     ! ==========================

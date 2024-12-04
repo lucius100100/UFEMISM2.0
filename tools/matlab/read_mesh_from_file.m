@@ -33,5 +33,7 @@ function mesh = read_mesh_from_file( filename)
   mesh.A              = ncread( filename,'A');
   mesh.lon            = ncread( filename,'lon');
   mesh.lat            = ncread( filename,'lat');
+  mesh.T_ocean        = ncread( filename,'T_ocean');
+  mesh.S_ocean        = ncread( filename,'S_ocean');
 
 end

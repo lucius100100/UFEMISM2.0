@@ -794,8 +794,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
-  ! == Read grid and data from file
-  ! ===============================
+   ! == Read grid and data from file
+   ! ===============================
 
     ! Open the NetCDF file
     CALL open_existing_netcdf_file_for_reading( filename, ncid)
@@ -870,8 +870,8 @@ CONTAINS
     ! Close the NetCDF file
     CALL close_netcdf_file( ncid)
 
-  ! == Perform necessary corrections to the gridded data
-  ! ====================================================
+   ! == Perform necessary corrections to the gridded data
+   ! ====================================================
 
     ! Indexing
     IF     (indexing == 'xy') THEN
@@ -902,8 +902,8 @@ CONTAINS
       CALL crash('unknown ydir = "' // TRIM( ydir) // '"!')
     END IF
 
-  ! == Distribute gridded data from the master to all processes in partial vector form
-  ! ==================================================================================
+   ! == Distribute gridded data from the master to all processes in partial vector form
+   ! ==================================================================================
 
     ! Distribute data
     CALL distribute_gridded_data_from_master_int_2D( grid_loc, d_grid, d_grid_vec_partial)
@@ -1356,7 +1356,7 @@ CONTAINS
 
   END SUBROUTINE read_field_from_xy_file_3D_ocean
 
-  ! Read data fields from an x/y-grid file
+  ! Read data fields from a lonlat-grid file
   SUBROUTINE read_field_from_lonlat_file_2D(         filename, field_name_options, d_grid_vec_partial, time_to_read)
     ! Read a 2-D data field from a NetCDF file on a lon/lat-grid
     !

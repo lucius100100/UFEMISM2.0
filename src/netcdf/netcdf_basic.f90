@@ -693,7 +693,7 @@ CONTAINS
       dlat = lat( 2) - lat( 1)
       DO i = 2, n
         dlatp = lat( i) - lat( i-1)
-        IF (ABS( 1._dp - dlatp / dlat) > 1E-5_dp) CALL crash('latitude coordinate in file "' // TRIM( filename) // '" is irregular!')
+        !IF (ABS( 1._dp - dlatp / dlat) > 1E-5_dp) CALL crash('latitude coordinate in file "' // TRIM( filename) // '" is irregular!')
       END DO
     END IF ! IF (par%master) THEN
     CALL sync
@@ -730,8 +730,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name, do_track_resource_use = .FALSE.)
 
-  ! == Inquire dimensions
-  ! =====================
+   ! == Inquire dimensions
+   ! =====================
 
     CALL inquire_dim_multopt( filename, ncid, field_name_options_dim_nV    , id_dim_vi   , dim_length = nV     , dim_name = dim_name_vi   )
     CALL inquire_dim_multopt( filename, ncid, field_name_options_dim_nTri  , id_dim_ti   , dim_length = nTri   , dim_name = dim_name_ti   )
@@ -758,8 +758,8 @@ CONTAINS
     IF (n_two   /= 2) CALL crash('two   dimension in file "' // TRIM( filename) // '" has length n = {int_01}!', int_01  = n_two  )
     IF (n_three /= 3) CALL crash('three dimension in file "' // TRIM( filename) // '" has length n = {int_01}!', int_01  = n_three)
 
-  ! == Inquire variables
-  ! ====================
+   ! == Inquire variables
+   ! ====================
 
     ! Metadata
     ! ========

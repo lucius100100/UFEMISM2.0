@@ -25,22 +25,704 @@ MODULE ocean_matrix
     USE mesh_types                                             , ONLY: type_mesh
     USE ice_model_types                                        , ONLY: type_ice_model
     USE ocean_model_types                                      , ONLY: type_ocean_model, type_ocean_matrix_interpolation
-    USE netcdf_input                                           , ONLY: read_field_from_file_3D_ocean
+    USE netcdf_input                                           , ONLY: read_field_from_file_3D_ocean, read_field_from_file_2D
     USE netcdf_basic                                           , ONLY: field_name_options_T_ocean, field_name_options_S_ocean
-  
+    USE ocean_utilities                                        , ONLY: debug_ocean_matrix_state
+
     IMPLICIT NONE
   
   CONTAINS
   
   ! ===== Main routines =====
   ! =========================
+  
+  SUBROUTINE interpolation_with_d18O(mesh, ocean, matrix, time)
+    ! Linear interpolation forcing based on GHG
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
+    REAL(dp),                               INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_d18O'
+    REAL(dp)                                              :: w_d18O
+    INTEGER                                               :: i, j
+    REAL(dp)                                              :: d18O_current, d18O_PI, d18O_LGM
+    REAL(dp)                                              :: scale_T, scale_S
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! Retrieve scaling factors from configuration
+    scale_T = C%scale_d18O_temperature   
+    scale_S = C%scale_d18O_salinity      
+
+    ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
+    CALL get_d18O_values(time, d18O_current)    ! d18O during runtime
+    CALL get_d18O_values(100.0_dp, d18O_PI)      ! PI
+    CALL get_d18O_values(21000.0_dp, d18O_LGM)  ! LGM
+
+    ! Compute weight based on d18O value ratios
+    w_d18O = (d18O_current - d18O_LGM) / (d18O_PI - d18O_LGM)
+
+    ! Clamp between cutoff values if enabled
+    IF (C%clamp_weights) THEN
+      w_d18O = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_d18O))
+    END IF
+
+    print *, "Debug: interpolation weight calculated = ", w_d18O
+
+    ! Apply interpolation using w_d18O and scaling
+    DO i = mesh%vi1, mesh%vi2
+      DO j = 1, C%nz_ocean
+        ocean%T(i,j) = w_d18O * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_d18O) * ocean%matrix%timeframe0%T(i,j) + scale_T * d18O_current
+        ocean%S(i,j) = w_d18O * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_d18O) * ocean%matrix%timeframe0%S(i,j) + scale_S * d18O_current
+      END DO
+    END DO
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE interpolation_with_d18O
+
+  SUBROUTINE get_d18O_values(time, d18O_current)
+    ! Get d18O values at the given time
+    ! Stenni, B., et al. (2006), EPICA Dome C Stable Isotope Data to 44.8 KYrBP.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    REAL(dp), INTENT(IN)                                  :: time
+    REAL(dp), INTENT(OUT)                                 :: d18O_current
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'get_d18O_values'
+    INTEGER, PARAMETER                                    :: num_points = 914
+    REAL(dp), DIMENSION(num_points)                       :: age_data, delta18O_data
+    INTEGER                                               :: i
+    !LOGICAL                                               :: found
+    INTEGER                                               :: idx_low, idx_high
+    REAL(dp)                                              :: t_low, t_high, fraction
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! FIX
+    ! Hardcoded values for now, should be reading in from csv / txt
+    ! https://stackoverflow.com/questions/8828377/reading-data-from-txt-file-in-fortran
+    
+    ! Initialize data arrays
+    age_data = (/ &
+    42.5_dp,     51.15_dp,     60.08_dp,     69.36_dp,     78.58_dp,     87.77_dp,     97.06_dp,     106.43_dp,     116.11_dp,     125.83_dp,     &
+    135.47_dp,     145.35_dp,     155.61_dp,     165.93_dp,     176.29_dp,     186.69_dp,     197.1_dp,     207.53_dp,     218.05_dp,     228.94_dp,     &
+    239.97_dp,     251.22_dp,     262.57_dp,     274.02_dp,     285.58_dp,     297.21_dp,     309.07_dp,     321.01_dp,     333.03_dp,     345.1_dp,     &
+    357.25_dp,     369.47_dp,     381.79_dp,     394.22_dp,     406.75_dp,     419.28_dp,     431.81_dp,     444.41_dp,     457.05_dp,     469.8_dp,     &
+    482.6_dp,     495.46_dp,     508.31_dp,     521.13_dp,     534.03_dp,     546.96_dp,     559.81_dp,     572.64_dp,     585.5_dp,     598.38_dp,     &
+    611.3_dp,     624.29_dp,     637.4_dp,     650.6_dp,     663.89_dp,     677.33_dp,     690.84_dp,     704.44_dp,     718.03_dp,     731.51_dp,     &
+    745.07_dp,     758.82_dp,     772.25_dp,     785.27_dp,     798.34_dp,     811.44_dp,     824.63_dp,     837.83_dp,     850.99_dp,     864.17_dp,     &
+    877.48_dp,     890.81_dp,     904.19_dp,     917.7_dp,     931.33_dp,     945.09_dp,     958.89_dp,     972.67_dp,     986.48_dp,     1000.49_dp,     &
+    1014.52_dp,     1028.55_dp,     1042.56_dp,     1056.55_dp,     1070.59_dp,     1084.65_dp,     1098.58_dp,     1112.49_dp,     1126.5_dp,     1140.56_dp,     &
+    1154.68_dp,     1168.75_dp,     1182.72_dp,     1196.69_dp,     1210.64_dp,     1224.57_dp,     1238.51_dp,     1252.64_dp,     1266.81_dp,     1281.03_dp,     &
+    1295.24_dp,     1309.44_dp,     1323.77_dp,     1338.25_dp,     1352.78_dp,     1367.34_dp,     1381.92_dp,     1396.54_dp,     1411.37_dp,     1426.34_dp,     &
+    1441.6_dp,     1456.89_dp,     1472.17_dp,     1487.48_dp,     1502.84_dp,     1518.4_dp,     1534.05_dp,     1549.76_dp,     1565.49_dp,     1581.25_dp,     &
+    1597.07_dp,     1613.02_dp,     1629.07_dp,     1645.24_dp,     1661.36_dp,     1677.42_dp,     1693.33_dp,     1709.29_dp,     1725.75_dp,     1742.27_dp,     &
+    1758.7_dp,     1775.06_dp,     1791.33_dp,     1807.75_dp,     1824.29_dp,     1840.75_dp,     1857.18_dp,     1873.65_dp,     1890.15_dp,     1906.71_dp,     &
+    1923.21_dp,     1939.55_dp,     1956.13_dp,     1973.01_dp,     1989.91_dp,     2006.82_dp,     2023.8_dp,     2040.81_dp,     2057.91_dp,     2075.06_dp,     &
+    2092.34_dp,     2109.61_dp,     2126.85_dp,     2144.21_dp,     2161.68_dp,     2179.29_dp,     2196.95_dp,     2232.37_dp,     2250.26_dp,     2268.33_dp,     &
+    2286.75_dp,     2305.2_dp,     2323.67_dp,     2342.16_dp,     2360.64_dp,     2379.11_dp,     2397.55_dp,     2415.9_dp,     2434.21_dp,     2452.44_dp,     &
+    2470.63_dp,     2488.72_dp,     2506.69_dp,     2524.56_dp,     2542.31_dp,     2560.01_dp,     2577.64_dp,     2595.25_dp,     2612.79_dp,     2630.34_dp,     &
+    2647.89_dp,     2665.39_dp,     2682.81_dp,     2700.1_dp,     2717.31_dp,     2734.42_dp,     2751.49_dp,     2768.53_dp,     2785.61_dp,     2802.81_dp,     &
+    2820.15_dp,     2837.69_dp,     2855.29_dp,     2872.92_dp,     2890.5_dp,     2908.1_dp,     2925.99_dp,     2943.98_dp,     2962.05_dp,     2980.13_dp,     &
+    2998.19_dp,     3016.33_dp,     3034.58_dp,     3052.76_dp,     3070.92_dp,     3107.93_dp,     3126.72_dp,     3145.59_dp,     3164.59_dp,     3183.64_dp,     &
+    3202.78_dp,     3221.95_dp,     3241.15_dp,     3260.36_dp,     3279.56_dp,     3298.74_dp,     3317.89_dp,     3336.98_dp,     3356.02_dp,     3374.98_dp,     &
+    3393.86_dp,     3412.65_dp,     3431.35_dp,     3449.98_dp,     3468.51_dp,     3486.99_dp,     3505.38_dp,     3523.74_dp,     3542.02_dp,     3560.27_dp,     &
+    3578.48_dp,     3596.67_dp,     3614.85_dp,     3633.06_dp,     3651.28_dp,     3669.58_dp,     3687.92_dp,     3706.39_dp,     3724.93_dp,     3743.6_dp,     &
+    3762.37_dp,     3781.26_dp,     3800.26_dp,     3819.33_dp,     3838.48_dp,     3857.68_dp,     3876.92_dp,     3896.17_dp,     3915.43_dp,     3934.67_dp,     &
+    3953.9_dp,     3973.1_dp,     3992.27_dp,     4011.42_dp,     4030.55_dp,     4049.67_dp,     4068.8_dp,     4087.93_dp,     4107.06_dp,     4126.2_dp,     &
+    4145.34_dp,     4164.48_dp,     4183.62_dp,     4202.77_dp,     4221.94_dp,     4241.13_dp,     4260.38_dp,     4279.66_dp,     4298.99_dp,     4318.33_dp,     &
+    4337.71_dp,     4357.1_dp,     4376.5_dp,     4395.91_dp,     4415.33_dp,     4434.78_dp,     4454.26_dp,     4473.8_dp,     4493.37_dp,     4512.98_dp,     &
+    4532.62_dp,     4552.3_dp,     4572.01_dp,     4591.74_dp,     4611.52_dp,     4631.33_dp,     4651.2_dp,     4671.08_dp,     4691.02_dp,     4710.96_dp,     &
+    4730.9_dp,     4750.8_dp,     4770.67_dp,     4790.45_dp,     4810.18_dp,     4829.82_dp,     4849.43_dp,     4869.0_dp,     4888.56_dp,     4908.12_dp,     &
+    4927.69_dp,     4947.29_dp,     4966.9_dp,     4986.51_dp,     5006.11_dp,     5025.7_dp,     5045.25_dp,     5064.78_dp,     5084.27_dp,     5103.75_dp,     &
+    5123.23_dp,     5142.72_dp,     5162.23_dp,     5181.79_dp,     5201.38_dp,     5221.02_dp,     5240.7_dp,     5260.47_dp,     5280.32_dp,     5300.29_dp,     &
+    5320.39_dp,     5340.63_dp,     5361.0_dp,     5381.47_dp,     5402.0_dp,     5422.56_dp,     5443.07_dp,     5463.52_dp,     5483.83_dp,     5504.04_dp,     &
+    5524.09_dp,     5544.01_dp,     5563.83_dp,     5583.52_dp,     5603.13_dp,     5622.63_dp,     5642.06_dp,     5661.39_dp,     5680.66_dp,     5699.86_dp,     &
+    5719.05_dp,     5738.22_dp,     5757.42_dp,     5776.66_dp,     5796.01_dp,     5815.42_dp,     5834.98_dp,     5854.61_dp,     5874.36_dp,     5894.17_dp,     &
+    5914.04_dp,     5933.93_dp,     5953.83_dp,     5973.72_dp,     5993.6_dp,     6013.48_dp,     6033.36_dp,     6053.26_dp,     6073.18_dp,     6093.14_dp,     &
+    6113.14_dp,     6133.19_dp,     6153.31_dp,     6173.47_dp,     6193.72_dp,     6214.0_dp,     6234.37_dp,     6254.77_dp,     6275.23_dp,     6295.7_dp,     &
+    6316.2_dp,     6336.69_dp,     6357.18_dp,     6377.66_dp,     6398.15_dp,     6418.67_dp,     6439.22_dp,     6459.83_dp,     6480.5_dp,     6501.24_dp,     &
+    6522.05_dp,     6542.92_dp,     6563.83_dp,     6584.76_dp,     6605.66_dp,     6626.56_dp,     6647.39_dp,     6668.2_dp,     6688.94_dp,     6709.63_dp,     &
+    6730.25_dp,     6750.8_dp,     6771.29_dp,     6791.69_dp,     6812.05_dp,     6832.39_dp,     6852.75_dp,     6873.18_dp,     6893.69_dp,     6914.33_dp,     &
+    6935.11_dp,     6956.03_dp,     6977.14_dp,     6998.38_dp,     7019.83_dp,     7041.38_dp,     7063.14_dp,     7084.98_dp,     7106.96_dp,     7128.98_dp,     &
+    7151.04_dp,     7172.44_dp,     7193.25_dp,     7213.1_dp,     7232.52_dp,     7251.85_dp,     7271.16_dp,     7290.43_dp,     7309.69_dp,     7328.92_dp,     &
+    7348.12_dp,     7367.28_dp,     7386.35_dp,     7405.36_dp,     7424.21_dp,     7443.0_dp,     7461.62_dp,     7480.17_dp,     7498.61_dp,     7517.02_dp,     &
+    7535.39_dp,     7553.76_dp,     7572.13_dp,     7590.52_dp,     7608.92_dp,     7627.34_dp,     7645.79_dp,     7664.27_dp,     7682.78_dp,     7701.34_dp,     &
+    7719.95_dp,     7738.62_dp,     7757.34_dp,     7776.11_dp,     7794.96_dp,     7813.86_dp,     7832.89_dp,     7852.0_dp,     7871.28_dp,     7890.67_dp,     &
+    7910.21_dp,     7929.87_dp,     7949.63_dp,     7969.5_dp,     7989.43_dp,     8009.43_dp,     8029.45_dp,     8049.51_dp,     8069.55_dp,     8089.58_dp,     &
+    8109.57_dp,     8129.52_dp,     8149.4_dp,     8169.25_dp,     8189.04_dp,     8208.8_dp,     8228.51_dp,     8248.17_dp,     8267.75_dp,     8287.26_dp,     &
+    8306.67_dp,     8325.97_dp,     8345.19_dp,     8364.28_dp,     8383.31_dp,     8402.23_dp,     8421.12_dp,     8439.95_dp,     8458.78_dp,     8477.61_dp,     &
+    8496.47_dp,     8515.36_dp,     8534.3_dp,     8553.28_dp,     8572.28_dp,     8591.3_dp,     8610.32_dp,     8629.32_dp,     8648.27_dp,     8667.18_dp,     &
+    8686.02_dp,     8704.79_dp,     8723.49_dp,     8742.12_dp,     8760.71_dp,     8779.25_dp,     8797.78_dp,     8816.3_dp,     8834.84_dp,     8853.41_dp,     &
+    8872.0_dp,     8890.63_dp,     8909.29_dp,     8927.97_dp,     8946.65_dp,     8965.31_dp,     8983.91_dp,     9002.46_dp,     9020.9_dp,     9039.27_dp,     &
+    9057.53_dp,     9075.71_dp,     9093.82_dp,     9111.85_dp,     9129.84_dp,     9147.75_dp,     9165.62_dp,     9183.42_dp,     9201.21_dp,     9218.98_dp,     &
+    9236.74_dp,     9272.3_dp,     9290.1_dp,     9307.9_dp,     9325.69_dp,     9343.44_dp,     9361.14_dp,     9378.75_dp,     9396.29_dp,     9413.73_dp,     &
+    9431.08_dp,     9448.36_dp,     9465.55_dp,     9482.69_dp,     9499.78_dp,     9516.87_dp,     9533.97_dp,     9551.1_dp,     9568.32_dp,     9585.61_dp,     &
+    9603.0_dp,     9620.48_dp,     9638.02_dp,     9655.62_dp,     9673.24_dp,     9690.88_dp,     9708.51_dp,     9726.12_dp,     9743.7_dp,     9761.24_dp,     &
+    9778.72_dp,     9796.15_dp,     9813.51_dp,     9830.82_dp,     9848.08_dp,     9865.31_dp,     9882.5_dp,     9899.69_dp,     9916.89_dp,     9934.13_dp,     &
+    9951.42_dp,     9968.8_dp,     9986.25_dp,     10003.82_dp,     10021.46_dp,     10039.22_dp,     10057.02_dp,     10074.91_dp,     10092.84_dp,     10110.83_dp,     &
+    10128.83_dp,     10146.85_dp,     10164.82_dp,     10182.76_dp,     10200.59_dp,     10218.35_dp,     10235.97_dp,     10253.52_dp,     10270.98_dp,     10288.43_dp,     &
+    10305.88_dp,     10323.41_dp,     10341.0_dp,     10358.75_dp,     10376.57_dp,     10394.57_dp,     10412.64_dp,     10430.85_dp,     10449.13_dp,     10467.52_dp,     &
+    10485.99_dp,     10504.54_dp,     10523.16_dp,     10541.81_dp,     10560.5_dp,     10579.2_dp,     10597.92_dp,     10616.65_dp,     10635.39_dp,     10654.16_dp,     &
+    10672.94_dp,     10691.75_dp,     10710.57_dp,     10729.42_dp,     10748.29_dp,     10767.17_dp,     10786.07_dp,     10804.99_dp,     10823.95_dp,     10842.95_dp,     &
+    10862.01_dp,     10881.1_dp,     10900.21_dp,     10919.32_dp,     10938.39_dp,     10957.44_dp,     10976.42_dp,     10995.37_dp,     11014.28_dp,     11033.17_dp,     &
+    11052.05_dp,     11070.91_dp,     11089.76_dp,     11108.59_dp,     11127.42_dp,     11146.27_dp,     11165.12_dp,     11184.0_dp,     11202.88_dp,     11221.76_dp,     &
+    11240.62_dp,     11259.48_dp,     11278.36_dp,     11297.28_dp,     11316.3_dp,     11335.37_dp,     11354.59_dp,     11373.87_dp,     11393.26_dp,     11412.7_dp,     &
+    11432.2_dp,     11451.77_dp,     11471.37_dp,     11491.08_dp,     11510.86_dp,     11530.82_dp,     11550.9_dp,     11571.23_dp,     11591.76_dp,     11612.58_dp,     &
+    11633.69_dp,     11655.05_dp,     11676.74_dp,     11698.61_dp,     11720.81_dp,     11743.14_dp,     11765.77_dp,     11788.55_dp,     11811.57_dp,     11834.78_dp,     &
+    11858.22_dp,     11881.91_dp,     11905.78_dp,     11929.93_dp,     11954.21_dp,     11978.72_dp,     12003.33_dp,     12028.11_dp,     12053.0_dp,     12078.05_dp,     &
+    12103.29_dp,     12128.7_dp,     12154.38_dp,     12180.22_dp,     12206.38_dp,     12232.68_dp,     12259.31_dp,     12286.11_dp,     12313.24_dp,     12340.62_dp,     &
+    12368.27_dp,     12396.19_dp,     12424.29_dp,     12452.57_dp,     12480.93_dp,     12509.36_dp,     12537.81_dp,     12566.25_dp,     12594.67_dp,     12623.06_dp,     &
+    12651.38_dp,     12679.64_dp,     12707.81_dp,     12735.92_dp,     12763.94_dp,     12791.91_dp,     12819.78_dp,     12847.61_dp,     12875.34_dp,     12903.0_dp,     &
+    12930.58_dp,     12958.07_dp,     12985.48_dp,     13012.78_dp,     13040.04_dp,     13067.22_dp,     13094.4_dp,     13121.6_dp,     13148.85_dp,     13176.18_dp,     &
+    13203.6_dp,     13231.11_dp,     13258.71_dp,     13286.37_dp,     13314.12_dp,     13341.92_dp,     13369.8_dp,     13397.74_dp,     13425.79_dp,     13453.93_dp,     &
+    13482.17_dp,     13510.44_dp,     13538.74_dp,     13566.98_dp,     13595.17_dp,     13623.22_dp,     13651.2_dp,     13679.0_dp,     13706.68_dp,     13734.2_dp,     &
+    13761.55_dp,     13788.75_dp,     13815.75_dp,     13842.64_dp,     13869.36_dp,     13896.0_dp,     13922.49_dp,     13948.89_dp,     13975.12_dp,     14001.2_dp,     &
+    14027.1_dp,     14052.8_dp,     14078.36_dp,     14103.75_dp,     14129.08_dp,     14154.39_dp,     14179.77_dp,     14205.33_dp,     14231.11_dp,     14257.22_dp,     &
+    14283.72_dp,     14310.57_dp,     14337.92_dp,     14365.55_dp,     14393.72_dp,     14422.13_dp,     14451.02_dp,     14480.1_dp,     14509.52_dp,     14539.07_dp,     &
+    14568.76_dp,     14598.46_dp,     14628.16_dp,     14657.77_dp,     14687.32_dp,     14716.77_dp,     14746.17_dp,     14775.53_dp,     14804.9_dp,     14834.3_dp,     &
+    14863.78_dp,     14893.35_dp,     14923.11_dp,     14952.99_dp,     14983.13_dp,     15013.42_dp,     15044.04_dp,     15074.87_dp,     15106.08_dp,     15137.57_dp,     &
+    15169.4_dp,     15201.58_dp,     15233.99_dp,     15266.7_dp,     15299.53_dp,     15332.56_dp,     15365.66_dp,     15398.87_dp,     15432.13_dp,     15465.46_dp,     &
+    15498.86_dp,     15532.31_dp,     15565.85_dp,     15599.46_dp,     15633.21_dp,     15667.05_dp,     15701.14_dp,     15735.38_dp,     15769.92_dp,     15804.71_dp,     &
+    15839.78_dp,     15875.2_dp,     15910.84_dp,     15946.86_dp,     15983.05_dp,     16019.58_dp,     16056.24_dp,     16093.15_dp,     16130.2_dp,     16167.43_dp,     &
+    16204.86_dp,     16242.45_dp,     16280.33_dp,     16318.38_dp,     16356.81_dp,     16395.45_dp,     16434.55_dp,     16473.92_dp,     16513.78_dp,     16554.02_dp,     &
+    16594.67_dp,     16635.82_dp,     16677.29_dp,     16719.32_dp,     16761.63_dp,     16804.49_dp,     16847.57_dp,     16891.08_dp,     16934.79_dp,     16978.78_dp,     &
+    17022.98_dp,     17067.34_dp,     17111.99_dp,     17156.8_dp,     17202.02_dp,     17247.46_dp,     17293.42_dp,     17339.66_dp,     17386.41_dp,     17433.53_dp,     &
+    17481.07_dp,     17529.01_dp,     17577.22_dp,     17625.77_dp,     17674.45_dp,     17723.34_dp,     17772.3_dp,     17821.39_dp,     17870.56_dp,     17919.82_dp,     &
+    17969.18_dp,     18018.62_dp,     18068.15_dp,     18117.72_dp,     18167.35_dp,     18217.01_dp,     18266.72_dp,     18316.47_dp,     18366.28_dp,     18416.14_dp,     &
+    18466.03_dp,     18515.94_dp,     18565.85_dp,     18615.72_dp,     18665.58_dp,     18715.41_dp,     18765.23_dp,     18815.05_dp,     18864.88_dp,     18914.74_dp,     &
+    18964.61_dp,     19014.49_dp,     19064.38_dp,     19114.27_dp,     19164.14_dp,     19213.98_dp,     19263.75_dp,     19313.46_dp,     19363.08_dp,     19412.63_dp,     &
+    19462.1_dp,     19511.57_dp,     19561.05_dp,     19610.68_dp,     19660.38_dp,     19710.33_dp,     19760.39_dp,     19810.64_dp,     19860.96_dp,     19911.34_dp,     &
+    19961.65_dp,     20011.89_dp,     20061.92_dp,     20111.83_dp,     20161.5_dp,     20211.08_dp,     20260.48_dp,     20309.8_dp,     20358.99_dp,     20408.1_dp,     &
+    20457.11_dp,     20506.06_dp,     20554.98_dp,     20603.89_dp,     20652.81_dp,     20701.77_dp,     20750.75_dp,     20799.76_dp,     20848.78_dp,     20897.81_dp,     &
+    20946.88_dp,     20995.98_dp,     21045.16_dp,     21094.39_dp /)
+  
+    delta18O_data = (/ &
+    -50.12_dp,     -49.16_dp,     -48.14_dp,     -50.35_dp,     -50.94_dp,     -50.6_dp,     -50.52_dp,     -51.07_dp,     -49.97_dp,     -50.89_dp,     &
+    -51.6_dp,     -50.45_dp,     -50.81_dp,     -49.98_dp,     -50.62_dp,     -51.07_dp,     -51.72_dp,     -50.11_dp,     -52.51_dp,     -50.22_dp,     &
+    -49.92_dp,     -49.86_dp,     -50.44_dp,     -50.7_dp,     -51.7_dp,     -50.98_dp,     -50.72_dp,     -51.68_dp,     -51.17_dp,     -51.26_dp,     &
+    -50.64_dp,     -51.5_dp,     -51.56_dp,     -51.89_dp,     -51.0_dp,     -50.55_dp,     -50.58_dp,     -51.93_dp,     -50.5_dp,     -50.49_dp,     &
+    -51.06_dp,     -51.24_dp,     -50.23_dp,     -52.52_dp,     -51.03_dp,     -50.94_dp,     -49.54_dp,     -50.14_dp,     -51.18_dp,     -49.53_dp,     &
+    -51.2_dp,     -51.18_dp,     -49.33_dp,     -49.82_dp,     -50.43_dp,     -51.31_dp,     -51.06_dp,     -51.1_dp,     -51.02_dp,     -51.49_dp,     &
+    -51.68_dp,     -51.58_dp,     -50.7_dp,     -50.82_dp,     -50.44_dp,     -50.65_dp,     -50.24_dp,     -49.93_dp,     -49.7_dp,     -49.57_dp,     &
+    -51.58_dp,     -50.27_dp,     -51.79_dp,     -49.99_dp,     -51.45_dp,     -51.04_dp,     -51.16_dp,     -51.28_dp,     -50.41_dp,     -51.06_dp,     &
+    -50.98_dp,     -51.55_dp,     -50.61_dp,     -49.76_dp,     -50.36_dp,     -51.06_dp,     -51.2_dp,     -50.17_dp,     -51.09_dp,     -49.6_dp,     &
+    -51.35_dp,     -50.9_dp,     -49.91_dp,     -49.89_dp,     -50.1_dp,     -51.15_dp,     -50.29_dp,     -50.31_dp,     -50.3_dp,     -50.8_dp,     &
+    -50.77_dp,     -49.77_dp,     -50.47_dp,     -50.0_dp,     -50.9_dp,     -49.43_dp,     -50.25_dp,     -50.89_dp,     -50.76_dp,     -51.0_dp,     &
+    -51.03_dp,     -50.98_dp,     -49.87_dp,     -51.44_dp,     -50.93_dp,     -50.99_dp,     -50.65_dp,     -50.03_dp,     -51.38_dp,     -50.48_dp,     &
+    -50.38_dp,     -51.65_dp,     -51.3_dp,     -50.27_dp,     -51.61_dp,     -50.43_dp,     -50.47_dp,     -51.28_dp,     -51.11_dp,     -50.64_dp,     &
+    -50.55_dp,     -50.16_dp,     -51.68_dp,     -50.68_dp,     -51.41_dp,     -51.45_dp,     -50.2_dp,     -51.44_dp,     -49.36_dp,     -50.68_dp,     &
+    -50.65_dp,     -50.89_dp,     -50.56_dp,     -50.77_dp,     -51.29_dp,     -51.34_dp,     -50.33_dp,     -51.36_dp,     -49.56_dp,     -51.17_dp,     &
+    -51.13_dp,     -50.3_dp,     -51.1_dp,     -50.86_dp,     -51.46_dp,     -51.04_dp,     -50.89_dp,     -49.96_dp,     -50.31_dp,     -50.82_dp,     &
+    -50.38_dp,     -52.07_dp,     -51.68_dp,     -50.99_dp,     -51.17_dp,     -51.28_dp,     -52.22_dp,     -51.22_dp,     -50.53_dp,     -51.03_dp,     &
+    -51.04_dp,     -50.28_dp,     -50.85_dp,     -49.87_dp,     -50.64_dp,     -50.23_dp,     -50.94_dp,     -50.26_dp,     -49.78_dp,     -50.29_dp,     &
+    -50.47_dp,     -51.01_dp,     -50.5_dp,     -51.27_dp,     -49.59_dp,     -49.89_dp,     -49.91_dp,     -49.9_dp,     -50.48_dp,     -49.63_dp,     &
+    -49.79_dp,     -49.59_dp,     -50.5_dp,     -51.17_dp,     -51.6_dp,     -50.09_dp,     -50.42_dp,     -50.77_dp,     -51.24_dp,     -50.58_dp,     &
+    -51.07_dp,     -50.71_dp,     -50.57_dp,     -50.64_dp,     -50.18_dp,     -49.46_dp,     -51.71_dp,     -51.17_dp,     -51.64_dp,     -50.18_dp,     &
+    -51.2_dp,     -51.98_dp,     -50.28_dp,     -51.09_dp,     -51.41_dp,     -50.03_dp,     -50.99_dp,     -51.75_dp,     -50.66_dp,     -50.85_dp,     &
+    -50.88_dp,     -50.72_dp,     -50.53_dp,     -50.31_dp,     -51.5_dp,     -49.7_dp,     -50.46_dp,     -50.91_dp,     -50.56_dp,     -51.01_dp,     &
+    -49.88_dp,     -49.96_dp,     -50.42_dp,     -50.02_dp,     -49.99_dp,     -51.44_dp,     -49.54_dp,     -49.63_dp,     -51.79_dp,     -49.7_dp,     &
+    -50.65_dp,     -50.22_dp,     -51.32_dp,     -51.31_dp,     -49.93_dp,     -50.61_dp,     -50.85_dp,     -50.62_dp,     -50.85_dp,     -50.18_dp,     &
+    -51.14_dp,     -51.07_dp,     -49.91_dp,     -49.97_dp,     -51.36_dp,     -49.67_dp,     -49.82_dp,     -50.82_dp,     -50.75_dp,     -50.31_dp,     &
+    -50.03_dp,     -51.83_dp,     -49.96_dp,     -49.49_dp,     -50.47_dp,     -49.4_dp,     -50.86_dp,     -51.31_dp,     -50.46_dp,     -50.22_dp,     &
+    -50.45_dp,     -50.83_dp,     -51.17_dp,     -50.23_dp,     -49.51_dp,     -50.86_dp,     -50.0_dp,     -51.07_dp,     -50.86_dp,     -51.23_dp,     &
+    -50.44_dp,     -50.41_dp,     -49.99_dp,     -50.88_dp,     -50.64_dp,     -50.62_dp,     -50.72_dp,     -49.84_dp,     -50.91_dp,     -51.38_dp,     &
+    -50.85_dp,     -50.82_dp,     -51.24_dp,     -50.73_dp,     -49.94_dp,     -50.38_dp,     -50.53_dp,     -50.49_dp,     -50.14_dp,     -49.86_dp,     &
+    -50.93_dp,     -51.0_dp,     -50.54_dp,     -50.67_dp,     -50.24_dp,     -51.33_dp,     -50.47_dp,     -50.56_dp,     -50.12_dp,     -50.04_dp,     &
+    -50.05_dp,     -50.35_dp,     -50.77_dp,     -50.56_dp,     -51.75_dp,     -50.74_dp,     -49.85_dp,     -50.46_dp,     -49.86_dp,     -50.61_dp,     &
+    -50.42_dp,     -50.16_dp,     -52.12_dp,     -51.23_dp,     -51.41_dp,     -50.56_dp,     -51.56_dp,     -52.2_dp,     -51.06_dp,     -50.48_dp,     &
+    -49.54_dp,     -50.65_dp,     -50.49_dp,     -51.11_dp,     -50.57_dp,     -50.54_dp,     -51.11_dp,     -50.07_dp,     -51.01_dp,     -49.35_dp,     &
+    -51.17_dp,     -49.8_dp,     -49.76_dp,     -51.2_dp,     -50.14_dp,     -49.96_dp,     -50.15_dp,     -50.8_dp,     -51.11_dp,     -51.02_dp,     &
+    -51.7_dp,     -50.88_dp,     -50.02_dp,     -50.55_dp,     -50.83_dp,     -51.12_dp,     -50.36_dp,     -50.05_dp,     -51.6_dp,     -49.8_dp,     &
+    -51.25_dp,     -50.95_dp,     -50.89_dp,     -50.42_dp,     -51.01_dp,     -51.37_dp,     -50.35_dp,     -50.7_dp,     -51.54_dp,     -51.72_dp,     &
+    -50.62_dp,     -51.53_dp,     -51.11_dp,     -50.79_dp,     -49.92_dp,     -50.48_dp,     -51.65_dp,     -51.44_dp,     -49.77_dp,     -50.84_dp,     &
+    -51.54_dp,     -51.18_dp,     -52.15_dp,     -50.63_dp,     -51.57_dp,     -51.97_dp,     -50.01_dp,     -50.06_dp,     -50.51_dp,     -51.47_dp,     &
+    -51.34_dp,     -51.16_dp,     -51.24_dp,     -50.88_dp,     -49.92_dp,     -50.44_dp,     -49.65_dp,     -50.97_dp,     -51.06_dp,     -51.25_dp,     &
+    -50.85_dp,     -50.79_dp,     -51.62_dp,     -51.01_dp,     -50.87_dp,     -51.23_dp,     -51.34_dp,     -50.84_dp,     -51.63_dp,     -52.63_dp,     &
+    -51.42_dp,     -51.16_dp,     -51.66_dp,     -51.42_dp,     -51.61_dp,     -50.76_dp,     -49.67_dp,     -50.94_dp,     -51.93_dp,     -51.13_dp,     &
+    -51.73_dp,     -51.57_dp,     -50.46_dp,     -51.43_dp,     -51.61_dp,     -51.01_dp,     -50.31_dp,     -51.09_dp,     -49.76_dp,     -50.83_dp,     &
+    -49.77_dp,     -51.34_dp,     -51.72_dp,     -50.87_dp,     -50.51_dp,     -49.92_dp,     -51.65_dp,     -51.16_dp,     -49.75_dp,     -49.92_dp,     &
+    -51.95_dp,     -51.21_dp,     -51.4_dp,     -51.44_dp,     -50.57_dp,     -50.01_dp,     -50.76_dp,     -51.06_dp,     -51.12_dp,     -51.34_dp,     &
+    -51.17_dp,     -51.96_dp,     -51.09_dp,     -52.79_dp,     -51.13_dp,     -50.76_dp,     -51.46_dp,     -51.77_dp,     -52.31_dp,     -52.24_dp,     &
+    -51.22_dp,     -51.58_dp,     -50.83_dp,     -51.2_dp,     -51.44_dp,     -51.26_dp,     -51.26_dp,     -52.03_dp,     -51.66_dp,     -51.82_dp,     &
+    -51.47_dp,     -51.0_dp,     -50.79_dp,     -50.83_dp,     -52.39_dp,     -50.82_dp,     -49.95_dp,     -50.88_dp,     -51.25_dp,     -50.23_dp,     &
+    -51.2_dp,     -51.11_dp,     -50.81_dp,     -51.43_dp,     -51.41_dp,     -50.91_dp,     -51.3_dp,     -50.53_dp,     -51.79_dp,     -51.51_dp,     &
+    -50.88_dp,     -50.5_dp,     -50.96_dp,     -50.69_dp,     -50.77_dp,     -51.0_dp,     -50.04_dp,     -50.28_dp,     -51.29_dp,     -50.62_dp,     &
+    -50.76_dp,     -50.57_dp,     -50.97_dp,     -50.51_dp,     -50.62_dp,     -52.09_dp,     -51.56_dp,     -50.13_dp,     -51.1_dp,     -49.96_dp,     &
+    -49.66_dp,     -50.36_dp,     -50.77_dp,     -51.36_dp,     -50.21_dp,     -50.27_dp,     -50.34_dp,     -50.51_dp,     -50.14_dp,     -50.2_dp,     &
+    -49.85_dp,     -49.74_dp,     -50.41_dp,     -51.69_dp,     -50.29_dp,     -50.95_dp,     -50.05_dp,     -50.49_dp,     -49.3_dp,     -50.08_dp,     &
+    -50.91_dp,     -50.13_dp,     -50.41_dp,     -49.08_dp,     -50.07_dp,     -49.95_dp,     -49.63_dp,     -49.99_dp,     -48.91_dp,     -49.53_dp,     &
+    -51.94_dp,     -50.06_dp,     -50.17_dp,     -51.19_dp,     -49.62_dp,     -50.55_dp,     -49.93_dp,     -50.48_dp,     -50.81_dp,     -49.63_dp,     &
+    -50.36_dp,     -50.4_dp,     -49.94_dp,     -49.72_dp,     -50.0_dp,     -49.65_dp,     -50.81_dp,     -49.84_dp,     -48.89_dp,     -49.43_dp,     &
+    -49.71_dp,     -50.16_dp,     -49.77_dp,     -50.14_dp,     -50.68_dp,     -51.06_dp,     -49.5_dp,     -49.99_dp,     -50.01_dp,     -49.82_dp,     &
+    -51.15_dp,     -49.68_dp,     -50.89_dp,     -50.25_dp,     -50.32_dp,     -50.98_dp,     -49.65_dp,     -49.42_dp,     -49.01_dp,     -49.58_dp,     &
+    -49.8_dp,     -48.06_dp,     -50.59_dp,     -49.88_dp,     -50.16_dp,     -50.42_dp,     -50.34_dp,     -50.19_dp,     -49.9_dp,     -48.94_dp,     &
+    -50.32_dp,     -50.45_dp,     -50.33_dp,     -50.65_dp,     -50.15_dp,     -49.89_dp,     -49.71_dp,     -49.36_dp,     -49.9_dp,     -50.77_dp,     &
+    -50.29_dp,     -49.79_dp,     -49.53_dp,     -50.36_dp,     -50.96_dp,     -50.11_dp,     -49.61_dp,     -49.91_dp,     -49.38_dp,     -49.69_dp,     &
+    -50.8_dp,     -50.46_dp,     -49.86_dp,     -50.53_dp,     -50.75_dp,     -50.34_dp,     -49.28_dp,     -49.25_dp,     -49.43_dp,     -49.85_dp,     &
+    -51.21_dp,     -50.07_dp,     -49.85_dp,     -50.23_dp,     -48.57_dp,     -48.69_dp,     -50.9_dp,     -50.26_dp,     -50.62_dp,     -50.11_dp,     &
+    -49.62_dp,     -49.18_dp,     -49.62_dp,     -48.82_dp,     -49.27_dp,     -49.92_dp,     -50.34_dp,     -50.13_dp,     -50.27_dp,     -50.32_dp,     &
+    -49.47_dp,     -50.14_dp,     -49.46_dp,     -50.23_dp,     -49.49_dp,     -50.46_dp,     -49.86_dp,     -50.17_dp,     -49.29_dp,     -50.36_dp,     &
+    -51.37_dp,     -50.83_dp,     -51.01_dp,     -50.74_dp,     -50.99_dp,     -50.77_dp,     -51.49_dp,     -51.51_dp,     -50.66_dp,     -50.82_dp,     &
+    -50.66_dp,     -51.67_dp,     -51.37_dp,     -51.59_dp,     -52.94_dp,     -51.84_dp,     -51.67_dp,     -52.4_dp,     -51.36_dp,     -51.08_dp,     &
+    -52.03_dp,     -50.97_dp,     -52.54_dp,     -52.82_dp,     -52.11_dp,     -53.19_dp,     -51.78_dp,     -51.35_dp,     -52.36_dp,     -52.43_dp,     &
+    -52.29_dp,     -53.51_dp,     -53.11_dp,     -53.21_dp,     -52.83_dp,     -53.3_dp,     -52.24_dp,     -52.63_dp,     -52.42_dp,     -53.3_dp,     &
+    -53.63_dp,     -52.52_dp,     -52.98_dp,     -52.04_dp,     -52.57_dp,     -52.95_dp,     -53.03_dp,     -52.72_dp,     -52.17_dp,     -52.54_dp,     &
+    -52.68_dp,     -53.11_dp,     -52.87_dp,     -52.52_dp,     -51.9_dp,     -52.28_dp,     -52.78_dp,     -52.14_dp,     -51.91_dp,     -52.43_dp,     &
+    -52.62_dp,     -53.43_dp,     -53.17_dp,     -52.63_dp,     -53.14_dp,     -52.36_dp,     -51.38_dp,     -52.6_dp,     -52.25_dp,     -52.97_dp,     &
+    -53.06_dp,     -53.22_dp,     -53.15_dp,     -52.16_dp,     -52.91_dp,     -52.54_dp,     -51.48_dp,     -53.0_dp,     -51.54_dp,     -52.68_dp,     &
+    -52.83_dp,     -52.42_dp,     -51.79_dp,     -51.24_dp,     -51.01_dp,     -51.57_dp,     -52.3_dp,     -52.19_dp,     -52.44_dp,     -51.54_dp,     &
+    -51.15_dp,     -51.45_dp,     -51.69_dp,     -52.33_dp,     -49.94_dp,     -50.48_dp,     -50.66_dp,     -51.08_dp,     -50.87_dp,     -51.27_dp,     &
+    -50.93_dp,     -53.05_dp,     -51.82_dp,     -51.02_dp,     -52.08_dp,     -52.15_dp,     -51.68_dp,     -52.49_dp,     -51.93_dp,     -52.97_dp,     &
+    -52.74_dp,     -52.14_dp,     -52.66_dp,     -52.43_dp,     -51.76_dp,     -51.95_dp,     -52.19_dp,     -51.75_dp,     -51.98_dp,     -52.19_dp,     &
+    -53.21_dp,     -50.88_dp,     -52.41_dp,     -52.82_dp,     -52.81_dp,     -51.84_dp,     -52.16_dp,     -52.35_dp,     -52.12_dp,     -52.59_dp,     &
+    -52.8_dp,     -53.34_dp,     -53.01_dp,     -53.14_dp,     -53.06_dp,     -53.31_dp,     -53.27_dp,     -52.65_dp,     -52.87_dp,     -53.02_dp,     &
+    -53.44_dp,     -52.93_dp,     -53.75_dp,     -52.57_dp,     -52.87_dp,     -53.0_dp,     -53.15_dp,     -52.93_dp,     -53.16_dp,     -53.38_dp,     &
+    -53.59_dp,     -52.94_dp,     -53.96_dp,     -53.38_dp,     -53.33_dp,     -53.83_dp,     -54.25_dp,     -53.93_dp,     -53.31_dp,     -53.44_dp,     &
+    -53.47_dp,     -53.38_dp,     -54.49_dp,     -53.61_dp,     -53.37_dp,     -53.79_dp,     -53.93_dp,     -53.73_dp,     -54.21_dp,     -55.16_dp,     &
+    -54.19_dp,     -54.53_dp,     -54.19_dp,     -53.92_dp,     -55.5_dp,     -54.47_dp,     -55.11_dp,     -55.04_dp,     -55.19_dp,     -55.66_dp,     &
+    -54.66_dp,     -54.81_dp,     -55.27_dp,     -54.27_dp,     -55.3_dp,     -54.4_dp,     -56.04_dp,     -55.21_dp,     -55.19_dp,     -55.76_dp,     &
+    -55.29_dp,     -55.73_dp,     -56.03_dp,     -56.08_dp,     -56.07_dp,     -56.22_dp,     -54.84_dp,     -55.54_dp,     -56.24_dp,     -55.49_dp,     &
+    -55.5_dp,     -55.91_dp,     -56.39_dp,     -56.23_dp,     -55.67_dp,     -55.86_dp,     -55.55_dp,     -55.83_dp,     -55.96_dp,     -55.91_dp,     &
+    -55.97_dp,     -56.15_dp,     -56.03_dp,     -56.69_dp,     -55.4_dp,     -55.75_dp,     -55.04_dp,     -56.25_dp,     -55.63_dp,     -55.98_dp,     &
+    -55.87_dp,     -55.83_dp,     -56.15_dp,     -55.51_dp,     -56.57_dp,     -55.9_dp,     -55.16_dp,     -56.71_dp,     -56.27_dp,     -55.09_dp,     &
+    -56.07_dp,     -55.87_dp,     -54.67_dp,     -56.07_dp,     -55.52_dp,     -56.27_dp,     -55.69_dp,     -56.23_dp,     -56.18_dp,     -56.55_dp,     &
+    -55.96_dp,     -56.46_dp,     -56.38_dp,     -55.6_dp,     -55.6_dp,     -55.24_dp,     -55.95_dp,     -56.74_dp,     -56.37_dp,     -55.53_dp,     &
+    -55.51_dp,     -55.99_dp,     -55.59_dp,     -56.36_dp,     -55.88_dp,     -55.88_dp,     -56.32_dp,     -56.31_dp,     -56.67_dp,     -55.73_dp,     &
+    -55.6_dp,     -55.84_dp,     -56.0_dp,     -56.24_dp /)
+
+    ! Initialize found flag
+    !found = .FALSE.
+    
+    ! Find the two indices such that age_data(idx_low) <= time <= age_data(idx_high)
+    idx_low = -1
+    idx_high = -1
+
+    IF (time <= age_data(1)) THEN
+        ! Time is before the first data point
+        idx_low = 1
+        idx_high = 1
+    ELSE IF (time >= age_data(num_points)) THEN
+        ! Time is after the last data point
+        idx_low = num_points
+        idx_high = num_points
+    ELSE
+        ! Time is within the data range
+        DO i = 1, num_points - 1
+            IF (age_data(i) <= time .AND. time <= age_data(i+1)) THEN
+                idx_low = i
+                idx_high = i + 1
+                EXIT
+            END IF
+        END DO
+    END IF
+
+    IF (idx_low == -1 .OR. idx_high == -1) THEN
+        CALL crash('Time value not within the range of age_data.')
+    END IF
+
+    t_low = age_data(idx_low)
+    t_high = age_data(idx_high)
+
+    IF (t_high == t_low) THEN
+        fraction = 0.0_dp
+    ELSE
+        fraction = (time - t_low) / (t_high - t_low)
+    END IF
+
+    ! Interpolate d18O values
+    d18O_current = delta18O_data(idx_low) + fraction * (delta18O_data(idx_high) - delta18O_data(idx_low))
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE get_d18O_values
+
+  SUBROUTINE apply_anomaly_fields(mesh, ocean, matrix, time)
+    ! Apply climatological annual mean anomaly fields progressively from PI to LGM over 21,000 years
+  
+    IMPLICIT NONE
+  
+    ! In/output variables:
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
+    REAL(dp),                               INTENT(IN)    :: time
+  
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'apply_anomaly_fields'
+    REAL(dp)                                              :: w_global
+    INTEGER                                               :: i, j
+    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: tas, sos
+  
+    ! Add routine to path
+    CALL init_routine( routine_name)
+  
+    ! Calculate global transition weight
+    w_global = time / 21000.0_dp
+    
+    ! Fetch annual mean anomaly fields
+    tas = ocean%matrix%tas  ! Ocean T
+    sos = ocean%matrix%sos  ! Ocean S
+    
+    WRITE(*, *) 'Weight time:', w_global
+
+    ! Apply scaled anomalies to PI snapshot to get current ocean state
+    DO i = mesh%vi1, mesh%vi2
+        DO j = 1, C%nz_ocean
+            ocean%T(i,j) = ocean%matrix%timeframe0%T(i,j) + w_global * tas(i)
+            ocean%S(i,j) = ocean%matrix%timeframe0%S(i,j) + w_global * sos(i)
+        END DO
+    END DO
+  
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+  
+  END SUBROUTINE apply_anomaly_fields  
+
+  SUBROUTINE interpolation_with_insolation_and_GHG_radiative(mesh, ocean, matrix, time)
+    ! Linear interpolation forcing based on insolation values
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
+    REAL(dp),                               INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_insolation_and_GHG_radiative'
+    INTEGER                                               :: i, j
+    ! Insolation
+    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: ins_current, w_ins
+    CHARACTER(LEN=256)                                    :: choice_insolation_forcing
+    REAL(dp)                                              :: time_to_read
+    CHARACTER(LEN=256)                                    :: filename_insolation
+    LOGICAL                                               :: apply_forcing
+    ! GHG
+    REAL(dp)                                              :: w_GHG
+    REAL(dp)                                              :: CO2_current, CH4_current, N2O_current
+    REAL(dp)                                              :: CO2_PI, CH4_PI, N2O_PI
+    REAL(dp)                                              :: CO2_LGM, CH4_LGM, N2O_LGM
+    REAL(dp)                                              :: DeltaF_CO2, DeltaF_CH4, DeltaF_N2O
+    REAL(dp)                                              :: DeltaF_CO2_PI, DeltaF_CH4_PI, DeltaF_N2O_PI
+    REAL(dp)                                              :: DeltaF_CO2_LGM, DeltaF_CH4_LGM, DeltaF_N2O_LGM
+    REAL(dp)                                              :: DeltaF_total, DeltaF_PI, DeltaF_LGM
+    CHARACTER(LEN=256)                                    :: CO2_relationship
+    CHARACTER(LEN=256)                                    :: GHG_inclusion
+    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: w_tot
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! ======================================= w_ins =======================================
+    ! Retrieve configuration settings
+    choice_insolation_forcing = TRIM(C%choice_insolation_forcing)
+    filename_insolation       = TRIM(C%filename_insolation)
+
+    ! Initialize apply_forcing flag based on forcing choice
+    IF (choice_insolation_forcing == 'none') THEN
+      apply_forcing = .FALSE.
+    ELSE
+      apply_forcing = .TRUE.
+    END IF
+
+    IF (apply_forcing) THEN
+
+      ! Allocate arrays
+      IF (.NOT. ALLOCATED(ins_current)) THEN
+        ALLOCATE(ins_current(mesh%vi1:mesh%vi2))
+      END IF
+      IF (.NOT. ALLOCATED(w_ins)) THEN
+        ALLOCATE(w_ins(mesh%vi1:mesh%vi2))
+      END IF
+      IF (.NOT. ALLOCATED(w_tot)) THEN
+        ALLOCATE(w_tot(mesh%vi1:mesh%vi2))
+      END IF
+  
+      ! Determine the time to read based on the forcing choice
+      SELECT CASE (choice_insolation_forcing)
+        CASE ('static')
+          time_to_read = C%static_insolation_time
+        CASE ('realistic')
+          time_to_read = time
+        CASE DEFAULT
+          CALL crash('Unknown choice_insolation_forcing: "' // choice_insolation_forcing // '"')
+      END SELECT
+  
+      ! Read insolation field at the determined time
+      CALL read_field_from_file_2D(TRIM(filename_insolation), 'Q_TOA', mesh, ins_current, time_to_read = time_to_read)
+  
+      ! Compute w_ins
+      w_ins = (ins_current - ocean%matrix%Q_TOA_PI) / (ocean%matrix%Q_TOA_LGM - ocean%matrix%Q_TOA_PI)
+  
+      ! Handle division by zero 
+      DO i = mesh%vi1, mesh%vi2
+        IF (ABS(ocean%matrix%Q_TOA_LGM(i) - ocean%matrix%Q_TOA_PI(i)) < 1e-5_dp) THEN
+          w_ins(i) = 0.0_dp
+        END IF
+      END DO
+  
+      ! ======================================= w_GHG =======================================
+
+      ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
+      CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
+      CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)
+      CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)
+
+      ! Get config settings
+      GHG_inclusion    = TRIM(C%choice_ghg_inclusion)
+      CO2_relationship = TRIM(C%choice_CO2_relationship)
+
+      ! Initialize DeltaFs
+      DeltaF_total = 0.0_dp
+      DeltaF_PI    = 0.0_dp
+      DeltaF_LGM   = 0.0_dp
+
+      ! Compute CO2 forcing
+      IF (ghg_inclusion == 'CO2' .OR. ghg_inclusion == 'CO2_CH4' .OR. ghg_inclusion == 'CO2_CH4_N2O') THEN
+        CALL compute_CO2_forcing(CO2_current, CO2_LGM, CO2_relationship, DeltaF_CO2)
+        CALL compute_CO2_forcing(CO2_PI,     CO2_LGM, CO2_relationship, DeltaF_CO2_PI)
+        CALL compute_CO2_forcing(CO2_LGM,    CO2_LGM, CO2_relationship, DeltaF_CO2_LGM) 
+
+        DeltaF_total = DeltaF_total + DeltaF_CO2
+        DeltaF_PI    = DeltaF_PI    + DeltaF_CO2_PI
+        DeltaF_LGM   = DeltaF_LGM   + DeltaF_CO2_LGM
+      END IF
+
+      ! Include CH4 forcing if selected
+      IF (ghg_inclusion == 'CO2_CH4' .OR. ghg_inclusion == 'CO2_CH4_N2O') THEN
+        CALL compute_CH4_forcing(CH4_current, CH4_LGM, N2O_LGM, DeltaF_CH4)
+        CALL compute_CH4_forcing(CH4_PI,      CH4_LGM, N2O_LGM, DeltaF_CH4_PI)
+        CALL compute_CH4_forcing(CH4_LGM,     CH4_LGM, N2O_LGM, DeltaF_CH4_LGM)
+
+        DeltaF_total = DeltaF_total + DeltaF_CH4
+        DeltaF_PI    = DeltaF_PI    + DeltaF_CH4_PI
+        DeltaF_LGM   = DeltaF_LGM   + DeltaF_CH4_LGM
+      END IF
+
+      ! Include N2O forcing if selected
+      IF (ghg_inclusion == 'CO2_CH4_N2O') THEN
+        CALL compute_N2O_forcing(N2O_current, N2O_LGM, CH4_LGM, DeltaF_N2O)
+        CALL compute_N2O_forcing(N2O_PI,      N2O_LGM, CH4_LGM, DeltaF_N2O_PI)
+        CALL compute_N2O_forcing(N2O_LGM,     N2O_LGM, CH4_LGM, DeltaF_N2O_LGM)
+
+        DeltaF_total = DeltaF_total + DeltaF_N2O
+        DeltaF_PI    = DeltaF_PI    + DeltaF_N2O_PI
+        DeltaF_LGM   = DeltaF_LGM   + DeltaF_N2O_LGM
+      END IF
+
+      ! Compute w_GHG
+      w_GHG = (DeltaF_total - DeltaF_LGM) / (DeltaF_PI - DeltaF_LGM)
+
+      ! ======================================= w_tot =======================================
+  
+      w_tot(i) = w_ins(i) + w_GHG
+
+      ! Clamp weights between cutoff values if enabled
+      IF (C%clamp_weights) THEN
+        DO i = mesh%vi1, mesh%vi2
+          w_tot = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_tot))
+        END DO
+      END IF
+
+      ! Apply interpolation using w_tot
+      DO i = mesh%vi1, mesh%vi2
+        DO j = 1, C%nz_ocean
+          ocean%T(i,j) = w_tot(i) * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%T(i,j)
+          ocean%S(i,j) = w_tot(i) * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%S(i,j)
+        END DO
+      END DO
+  
+      ! Deallocate arrays
+      DEALLOCATE(ins_current)
+      DEALLOCATE(w_ins)
+      DEALLOCATE(w_tot)
+  
+    ELSE
+      ! If forcing is 'none', do not modify the ocean state
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE interpolation_with_insolation_and_GHG_radiative
+
+  SUBROUTINE interpolation_with_insolation_and_GHG(mesh, ocean, matrix, time)
+    ! Linear interpolation forcing based on insolation values
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
+    REAL(dp),                               INTENT(IN)    :: time
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_insolation_and_GHG'
+    INTEGER                                               :: i, j
+    ! Insolation
+    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: ins_current, w_ins
+    CHARACTER(LEN=256)                                    :: choice_insolation_forcing
+    REAL(dp)                                              :: time_to_read
+    CHARACTER(LEN=256)                                    :: filename_insolation
+    LOGICAL                                               :: apply_forcing
+    ! GHG
+    REAL(dp)                                              :: w_GHG, w_GHG_CO2, w_GHG_CH4, w_GHG_N2O
+    REAL(dp)                                              :: CO2_current, CH4_current, N2O_current
+    REAL(dp)                                              :: CO2_PI, CH4_PI, N2O_PI
+    REAL(dp)                                              :: CO2_LGM, CH4_LGM, N2O_LGM
+    CHARACTER(LEN=256)                                    :: GHG_inclusion
+    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: w_tot
+
+    ! Add routine to path
+    CALL init_routine( routine_name)
+
+    ! ======================================= w_ins =======================================
+    ! Retrieve configuration settings
+    choice_insolation_forcing = TRIM(C%choice_insolation_forcing)
+    filename_insolation       = TRIM(C%filename_insolation)
+
+    ! Initialize apply_forcing flag based on forcing choice
+    IF (choice_insolation_forcing == 'none') THEN
+      apply_forcing = .FALSE.
+    ELSE
+      apply_forcing = .TRUE.
+    END IF
+
+    IF (apply_forcing) THEN
+
+      ! Allocate arrays
+      IF (.NOT. ALLOCATED(ins_current)) THEN
+        ALLOCATE(ins_current(mesh%vi1:mesh%vi2))
+      END IF
+      IF (.NOT. ALLOCATED(w_ins)) THEN
+        ALLOCATE(w_ins(mesh%vi1:mesh%vi2))
+      END IF
+      IF (.NOT. ALLOCATED(w_tot)) THEN
+        ALLOCATE(w_tot(mesh%vi1:mesh%vi2))
+      END IF
+  
+      ! Determine the time to read based on the forcing choice
+      SELECT CASE (choice_insolation_forcing)
+        CASE ('static')
+          time_to_read = C%static_insolation_time
+        CASE ('realistic')
+          time_to_read = time
+        CASE DEFAULT
+          CALL crash('Unknown choice_insolation_forcing: "' // choice_insolation_forcing // '"')
+      END SELECT
+  
+      ! Read insolation field at the determined time
+      CALL read_field_from_file_2D(TRIM(filename_insolation), 'Q_TOA', mesh, ins_current, time_to_read = time_to_read)
+  
+      ! Compute w_ins
+      w_ins = (ins_current - ocean%matrix%Q_TOA_PI) / (ocean%matrix%Q_TOA_LGM - ocean%matrix%Q_TOA_PI)
+  
+      ! Handle division by zero 
+      DO i = mesh%vi1, mesh%vi2
+        IF (ABS(ocean%matrix%Q_TOA_LGM(i) - ocean%matrix%Q_TOA_PI(i)) < 1e-5_dp) THEN
+          w_ins(i) = 0.0_dp
+        END IF
+      END DO
+  
+      ! ======================================= w_GHG =======================================
+
+      ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
+      CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)  ! Concentration during runtime
+      CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)             ! PI
+      CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)        ! LGM
+  
+      ! Get config settings
+      GHG_inclusion = TRIM(C%choice_ghg_inclusion)
+  
+      ! Compute weights based on GHG concentration ratios
+      ! w_CO2
+      IF (GHG_inclusion == 'CO2' .OR. GHG_inclusion == 'CO2_CH4' .OR. GHG_inclusion == 'CO2_CH4_N2O') THEN
+        w_GHG_CO2 = (CO2_current - CO2_LGM) / (CO2_PI - CO2_LGM)
+      ELSE
+          w_GHG_CO2 = 0.0_dp
+      END IF
+  
+      ! w_CH4
+      IF (GHG_inclusion == 'CO2_CH4' .OR. GHG_inclusion == 'CO2_CH4_N2O') THEN
+          w_GHG_CH4 = (CH4_current - CH4_LGM) / (CH4_PI - CH4_LGM)
+      ELSE
+          w_GHG_CH4 = 0.0_dp
+      END IF
+  
+      ! w_N2O
+      IF (GHG_inclusion == 'CO2_CH4_N2O') THEN
+          w_GHG_N2O = (N2O_current - N2O_LGM) / (N2O_PI - N2O_LGM)
+      ELSE
+          w_GHG_N2O = 0.0_dp
+      END IF
+  
+      ! Combine weights based on selected GHGs
+      IF (GHG_inclusion == 'CO2') THEN
+          w_GHG = w_GHG_CO2
+      ELSE IF (GHG_inclusion == 'CO2_CH4') THEN
+          w_GHG = (w_GHG_CO2 + w_GHG_CH4) / 2.0_dp
+      ELSE IF (GHG_inclusion == 'CO2_CH4_N2O') THEN
+          w_GHG = (w_GHG_CO2 + w_GHG_CH4 + w_GHG_N2O) / 3.0_dp
+      ELSE
+          CALL crash('Unknown choice_ghg_inclusion: "' // TRIM(GHG_inclusion) // '"')
+      END IF
+
+      ! ======================================= w_tot =======================================
+  
+      w_tot(i) = w_ins(i) + w_GHG
+
+      ! Clamp weights between cutoff values if enabled
+      IF (C%clamp_weights) THEN
+        DO i = mesh%vi1, mesh%vi2
+          w_tot = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_tot))
+        END DO
+      END IF
+
+      ! Apply interpolation using w_tot
+      DO i = mesh%vi1, mesh%vi2
+        DO j = 1, C%nz_ocean
+          ocean%T(i,j) = w_tot(i) * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%T(i,j)
+          ocean%S(i,j) = w_tot(i) * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%S(i,j)
+        END DO
+      END DO
+  
+      ! Deallocate arrays
+      DEALLOCATE(ins_current)
+      DEALLOCATE(w_ins)
+      DEALLOCATE(w_tot)
+  
+    ELSE
+      ! If forcing is 'none', do not modify the ocean state
+    END IF
+
+    ! Finalise routine path
+    CALL finalise_routine( routine_name)
+
+  END SUBROUTINE interpolation_with_insolation_and_GHG
 
   SUBROUTINE interpolation_with_insolation(mesh, ocean, matrix, time)
     ! Linear interpolation forcing based on insolation values
 
     IMPLICIT NONE
 
-    ! In- and output variables
+    ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
@@ -48,95 +730,87 @@ MODULE ocean_matrix
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_insolation'
-    REAL(dp)                                              :: w_ins
     INTEGER                                               :: i, j
-    REAL(dp)                                              :: ins_current, ins_PI, ins_LGM
-    !REAL(dp), PARAMETER                                   :: ins_PI = 440.0_dp
-    !REAL(dp), PARAMETER                                   :: ins_LGM = 70.0_dp
+    REAL(dp), DIMENSION(:), ALLOCATABLE                   :: ins_current, w_ins
+    CHARACTER(LEN=256)                                    :: choice_insolation_forcing
+    REAL(dp)                                              :: time_to_read
+    CHARACTER(LEN=256)                                    :: filename_insolation
+    LOGICAL                                               :: apply_forcing
 
     ! Add routine to path
     CALL init_routine( routine_name)
 
-    ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
-    CALL get_insolation(time, ins_current)
-    CALL get_insolation(0.0_dp, ins_PI) ! Should actually be 100.0_dp, but insolation solution is in ka
-    CALL get_insolation(21000.0_dp, ins_LGM)
+    ! Retrieve configuration settings
+    choice_insolation_forcing = TRIM(C%choice_insolation_forcing)
+    filename_insolation       = TRIM(C%filename_insolation)
 
-    ! Compute w_ins
-    w_ins = (ins_current - ins_LGM) / (ins_PI - ins_LGM)
-
-    ! Clamp between cutoff values if enabled
-    IF (C%clamp_weights) THEN
-        w_ins = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_ins))
+    ! Initialize apply_forcing flag based on forcing choice
+    IF (choice_insolation_forcing == 'none') THEN
+      apply_forcing = .FALSE.
+    ELSE
+      apply_forcing = .TRUE.
     END IF
 
-    ! Apply interpolation using w_ins
-    DO i = mesh%vi1, mesh%vi2
-        DO j = 1, C%nz_ocean
-            ocean%T(i,j) = w_ins * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_ins) * ocean%matrix%timeframe0%T(i,j)
-            ocean%S(i,j) = w_ins * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_ins) * ocean%matrix%timeframe0%S(i,j)
+    IF (apply_forcing) THEN
+
+      ! Allocate arrays
+      IF (.NOT. ALLOCATED(ins_current)) THEN
+        ALLOCATE(ins_current(mesh%vi1:mesh%vi2))
+      END IF
+      IF (.NOT. ALLOCATED(w_ins)) THEN
+        ALLOCATE(w_ins(mesh%vi1:mesh%vi2))
+      END IF
+  
+      ! Determine the time to read based on the forcing choice
+      SELECT CASE (choice_insolation_forcing)
+        CASE ('static')
+          time_to_read = C%static_insolation_time
+        CASE ('realistic')
+          time_to_read = time
+        CASE DEFAULT
+          CALL crash('Unknown choice_insolation_forcing: "' // choice_insolation_forcing // '"')
+      END SELECT
+  
+      ! Read insolation field at the determined time
+      CALL read_field_from_file_2D(TRIM(filename_insolation), 'Q_TOA', mesh, ins_current, time_to_read = time_to_read)
+  
+      ! Compute w_ins
+      w_ins = (ins_current - ocean%matrix%Q_TOA_PI) / (ocean%matrix%Q_TOA_LGM - ocean%matrix%Q_TOA_PI)
+  
+      ! Handle division by zero 
+      DO i = mesh%vi1, mesh%vi2
+        IF (ABS(ocean%matrix%Q_TOA_LGM(i) - ocean%matrix%Q_TOA_PI(i)) < 1e-5_dp) THEN
+          w_ins(i) = 0.0_dp
+        END IF
+      END DO
+  
+      ! Clamp weights between cutoff values if enabled
+      IF (C%clamp_weights) THEN
+        DO i = mesh%vi1, mesh%vi2
+          w_ins(i) = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_ins(i)))
         END DO
-    END DO
+      END IF
+  
+      ! Apply interpolation using w_ins
+      DO i = mesh%vi1, mesh%vi2
+        DO j = 1, C%nz_ocean
+          ocean%T(i,j) = w_ins(i) * ocean%matrix%timeframe1%T(i,j) + (1.0_dp - w_ins(i)) * ocean%matrix%timeframe0%T(i,j)
+          ocean%S(i,j) = w_ins(i) * ocean%matrix%timeframe1%S(i,j) + (1.0_dp - w_ins(i)) * ocean%matrix%timeframe0%S(i,j)
+        END DO
+      END DO
+  
+      ! Deallocate arrays
+      DEALLOCATE(ins_current)
+      DEALLOCATE(w_ins)
+  
+    ELSE
+      ! If forcing is 'none', do not modify the ocean state
+    END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
 
   END SUBROUTINE interpolation_with_insolation
-
-  SUBROUTINE get_insolation(time, ins_current)
-    ! Get insolation values at the given time
-
-    IMPLICIT NONE
-
-    ! In- and output variables
-    REAL(dp), INTENT(IN)                                  :: time
-    REAL(dp), INTENT(OUT)                                 :: ins_current
-
-    ! Local variables:
-    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'get_insolation'
-    INTEGER, PARAMETER                                    :: num_points = 22
-    REAL(dp), DIMENSION(num_points)                       :: age_data
-    REAL(dp), DIMENSION(num_points)                       :: ins_data
-    INTEGER                                               :: i
-    LOGICAL                                               :: found
-
-    ! Add routine to path
-    CALL init_routine( routine_name)
-
-    ! FIX
-    ! Hardcoded values for now, should be reading in from csv
-    
-    ! Berger, A; Loutre, Marie-France (1999)
-    ! Initialize data arrays
-    age_data = (/ &
-    0.0_dp, 1000.0_dp, 2000.0_dp, 3000.0_dp, 4000.0_dp, 5000.0_dp, 6000.0_dp, 7000.0_dp, 8000.0_dp, 9000.0_dp, 10000.0_dp, 11000.0_dp, &
-    12000.0_dp, 13000.0_dp, 14000.0_dp, 15000.0_dp, 16000.0_dp, 17000.0_dp, 18000.0_dp, 19000.0_dp, 20000.0_dp, 21000.0_dp /)
-    
-    ins_data = (/ &
-	  426.76_dp, 430.12_dp, 434.69_dp, 440.20_dp, 446.28_dp, 452.48_dp, 458.31_dp, 463.29_dp, 467.00_dp, 469.12_dp, &
-    469.44_dp, 467.92_dp, 464.67_dp, 459.95_dp, 454.12_dp, 447.62_dp, 440.92_dp, 434.50_dp, 428.77_dp, 424.07_dp, &
-    420.64_dp, 418.62_dp /)
-
-    ! Initialize found flag
-    found = .FALSE.
-    
-    ! Search for the time in age_data
-    DO i = 1, num_points
-        IF (ABS(age_data(i) - time) < 1e-3_dp) THEN
-            ins_current = ins_data(i)
-            found = .TRUE.
-            EXIT
-        END IF
-    END DO
-    
-    IF (.NOT. found) THEN
-        CALL crash('Time value not found in age_data.')
-    END IF
-
-    ! Finalise routine path
-    CALL finalise_routine( routine_name)
-
-  END SUBROUTINE get_insolation
 
   SUBROUTINE linear_time_interpolation(mesh, ocean, matrix, time)
     ! Linear interpolation between two ocean snapshots
@@ -157,9 +831,16 @@ MODULE ocean_matrix
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    ! Check for division by 0 error
+    IF (ABS(ocean%matrix%t1 - ocean%matrix%t0) < 1e-5_dp) THEN
+      CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
+    END IF
+
     ! Calculate weights for linear interpolation
     wt0 = (ocean%matrix%t1 - time) / (ocean%matrix%t1 - ocean%matrix%t0)
     wt1 = 1.0_dp - wt0
+
+    print *, "Debug: interpolation weight calculated = ", wt0
 
     ! Apply linear interpolation
     DO i = mesh%vi1, mesh%vi2
@@ -168,11 +849,6 @@ MODULE ocean_matrix
             ocean%S(i,j) = wt0 * ocean%matrix%timeframe0%S(i,j) + wt1 * ocean%matrix%timeframe1%S(i,j)
         END DO
     END DO
-    
-    ! Check for division by 0 error
-    !IF (ABS(ocean%matrix%t1 - ocean%matrix%t0) < 1e-5_dp) THEN
-      !CALL crash('t0 and t1 are too close or identical, interpolation cannot be performed.')
-    !END IF
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -184,7 +860,7 @@ MODULE ocean_matrix
 
     IMPLICIT NONE
 
-    ! In- and output variables
+    ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
@@ -203,12 +879,12 @@ MODULE ocean_matrix
     CALL init_routine( routine_name)
 
     ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
-    CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
-    CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)
-    CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)
+    CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)  ! Concentration during runtime
+    CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)             ! PI
+    CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)        ! LGM
 
     ! Get config settings
-    GHG_inclusion    = TRIM(C%choice_ghg_inclusion)
+    GHG_inclusion = TRIM(C%choice_ghg_inclusion)
 
     ! Compute weights based on GHG concentration ratios
     ! w_CO2
@@ -248,6 +924,8 @@ MODULE ocean_matrix
         w_GHG = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_GHG))
     END IF
 
+    print *, "Debug: interpolation weight calculated = ", w_GHG
+
     ! Apply interpolation using w_GHG
     DO i = mesh%vi1, mesh%vi2
         DO j = 1, C%nz_ocean
@@ -266,7 +944,7 @@ MODULE ocean_matrix
 
     IMPLICIT NONE
 
-    ! In- and output variables
+    ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
@@ -358,11 +1036,13 @@ MODULE ocean_matrix
   END SUBROUTINE interpolation_with_GHG_radiative
 
   SUBROUTINE get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
-    ! Get GHG concentrations at the given time
+    ! Get GHG concentrations at the given time, linearly interpolated concentrations to match age data
+    ! CH4 & N2O: EPICA Dome C – Nitrous Oxide and Methane Data (Spahni, R.)
+    ! CO2:       EPICA Dome C - 800KYr CO2 Data (Luthi, D.)
 
     IMPLICIT NONE
 
-    ! In- and output variables
+    ! In/output variables:
     REAL(dp), INTENT(IN)                                  :: time
     REAL(dp), INTENT(OUT)                                 :: CO2_current
     REAL(dp), INTENT(OUT)                                 :: CH4_current
@@ -371,10 +1051,7 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'get_GHG_concentrations'
     INTEGER, PARAMETER                                    :: num_points = 373
-    REAL(dp), DIMENSION(num_points)                       :: age_data
-    REAL(dp), DIMENSION(num_points)                       :: CO2_data
-    REAL(dp), DIMENSION(num_points)                       :: CH4_data
-    REAL(dp), DIMENSION(num_points)                       :: N2O_data
+    REAL(dp), DIMENSION(num_points)                       :: age_data, CO2_data, CH4_data, N2O_data
     INTEGER                                               :: i
     !LOGICAL                                               :: found
     INTEGER                                               :: idx_low, idx_high
@@ -599,10 +1276,11 @@ MODULE ocean_matrix
 
   SUBROUTINE compute_CO2_forcing(CO2_current, CO2_ref, CO2_relationship, DeltaF_CO2)
     ! Compute radiative forcing due to CO2 using specified relationship
+    ! IPCC TAR-06 (2018)
 
     IMPLICIT NONE
 
-    ! Input variables
+    ! In/output variables:
     REAL(dp), INTENT(IN)                                  :: CO2_current       ! Current CO2 concentration (ppm)
     REAL(dp), INTENT(IN)                                  :: CO2_ref           ! LGM CO2 concentration (ppm)
     CHARACTER(LEN=256), INTENT(IN)                        :: CO2_relationship  ! Relationship to use ('relationship1', etc.)
@@ -619,23 +1297,23 @@ MODULE ocean_matrix
     ! Compute DeltaF_CO2 based on selected relationship
     SELECT CASE (CO2_relationship)
 
-    CASE ('relationship1')
+    CASE ('relationship1') ! IPCC (1990)
       ! ∆F= α ln(C/C0)
       alpha = 5.35_dp
       DeltaF_CO2 = alpha * LOG(CO2_current / CO2_ref)
       
-    CASE ('relationship2')
+    CASE ('relationship2') ! Shi (1992)
       ! ∆F= α ln(C/C0) + β(√C − √C0)
       alpha = 4.841_dp
       beta = 0.0906_dp
       DeltaF_CO2 = alpha * LOG(CO2_current / CO2_ref) + beta * (SQRT(CO2_current) - SQRT(CO2_ref))
     
-    CASE ('relationship3')
+    CASE ('relationship3') ! WMO (1999)
       ! ∆F= α(g(C)–g(C0)), where g(C) = ln(1 + 1.2C + 0.005C² + 1.4 × 10⁻⁶C³)
       alpha = 3.35_dp
       g_current = LOG(1.0_dp + 1.2_dp*CO2_current + 0.005_dp*CO2_current**2 + 1.4e-6_dp*CO2_current**3)
       g_ref = LOG(1.0_dp + 1.2_dp*CO2_ref + 0.005_dp*CO2_ref**2 + 1.4e-6_dp*CO2_ref**3)
-      DeltaF_CO2 = alpha * g_current - g_ref 
+      DeltaF_CO2 = alpha * (g_current - g_ref) 
     
     CASE DEFAULT
       CALL crash('Unknown CO2 relationship: ' // CO2_relationship)
@@ -649,6 +1327,7 @@ MODULE ocean_matrix
   FUNCTION f_overlap(M, N) RESULT(f)
     ! Function radiative forcing CH4 and N2O
     ! f(M,N) = 0.47 * ln[1 + 2.01e-5 * (M*N)^0.75 + 5.31e-15 * M * (M*N)^1.52]
+    ! IPCC TAR-06 (2018)
 
     IMPLICIT NONE
 
@@ -675,6 +1354,7 @@ MODULE ocean_matrix
 
   SUBROUTINE compute_CH4_forcing(M, M0, N0, DeltaF_CH4)
     ! Compute radiative forcing contributions from CH4 and N2O
+    ! IPCC TAR-06 (2018)
     
     IMPLICIT NONE
 
@@ -702,6 +1382,7 @@ MODULE ocean_matrix
 
   SUBROUTINE compute_N2O_forcing(N, N0, M0, DeltaF_N2O)
     ! Compute radiative forcing contributions from N2O
+    ! IPCC TAR-06 (2018)
     
     IMPLICIT NONE
 
@@ -727,87 +1408,8 @@ MODULE ocean_matrix
 
   END SUBROUTINE compute_N2O_forcing
 
-  !SUBROUTINE polynomial_time_interpolation(mesh, ocean, time, num_timeframes, times, weights)
-    ! Polynomial interpolation (Lagrange)
-
-    !IMPLICIT NONE
-
-    ! In/output variables:
-    !TYPE(type_mesh),                          INTENT(IN)    :: mesh
-    !TYPE(type_ocean_model),                   INTENT(INOUT) :: ocean
-    !REAL(dp),                                 INTENT(IN)    :: time
-    !INTEGER,                                  INTENT(IN)    :: num_timeframes
-    !REAL(dp), DIMENSION(:),                   INTENT(IN)    :: times
-    !REAL(dp), DIMENSION(:),                   INTENT(OUT)   :: weights
-
-    ! Local variables:
-    !CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'polynomial_time_interpolation'
-    !INTEGER                                               :: n, m, i, j, polynomial_order
-
-    ! Add routine to path
-    !CALL init_routine( routine_name)
-
-    ! Polynomial order based on the number of timeframes
-    !polynomial_order = num_timeframes - 1
-
-    ! Calculate weights for polynomial interpolation
-    !DO n = 1, num_timeframes
-        !weights(n) = 1.0_dp
-        !DO m = 1, num_timeframes
-            !IF (m /= n) THEN
-                !weights(n) = weights(n) * (time - times(m)) / (times(n) - times(m))
-            !END IF
-        !END DO
-    !END DO
-
-    ! Apply polynomial interpolation
-    !DO i = mesh%vi1, mesh%vi2
-      !DO j = 1, C%nz_ocean
-          !ocean%T(i, j) = 0.0_dp
-          !ocean%S(i, j) = 0.0_dp
-
-          ! Sum the contributions from each available timeframe
-          !n = 0
-          !IF (ALLOCATED(ocean%matrix%timeframe0%T)) THEN
-              !n = n + 1
-              !IF (n <= num_timeframes) THEN
-                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe0%T(i, j)
-                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe0%S(i, j)
-              !END IF
-          !END IF
-          !IF (ALLOCATED(ocean%matrix%timeframe1%T)) THEN
-              !n = n + 1
-              !IF (n <= num_timeframes) THEN
-                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe1%T(i, j)
-                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe1%S(i, j)
-              !END IF
-          !END IF
-          !IF (ALLOCATED(ocean%matrix%timeframe2%T)) THEN
-              !n = n + 1
-              !IF (n <= num_timeframes) THEN
-                  !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe2%T(i, j)
-                  !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe2%S(i, j)
-              !END IF
-          !END IF
-          !IF (ALLOCATED(ocean%matrix%timeframe3%T)) THEN
-            !n = n + 1
-            !IF (n <= num_timeframes) THEN
-                !ocean%T(i, j) = ocean%T(i, j) + weights(n) * ocean%matrix%timeframe3%T(i, j)
-                !ocean%S(i, j) = ocean%S(i, j) + weights(n) * ocean%matrix%timeframe3%S(i, j)
-            !END IF
-          !END IF
-          ! Limited polynomial order due to computational time
-      !END DO
-    !END DO
-
-    ! Finalise routine path
-    !CALL finalise_routine( routine_name)
-  
-  !END SUBROUTINE polynomial_time_interpolation
-
   SUBROUTINE run_ocean_model_matrix( mesh, ice, ocean, time, region_name)
     ! Calculate the ocean
-    !
     ! Use an interpolating matrix ocean scheme
   
     IMPLICIT NONE
@@ -822,30 +1424,27 @@ MODULE ocean_matrix
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_ocean_model_matrix'
     TYPE(type_ocean_matrix_interpolation)                 :: matrix
-    INTEGER                                               :: required_timeframes
 
     ! Add routine to path
     CALL init_routine( routine_name) 
 
-    ! Minimum required amount of timeframes for each linear time interpolation method
-    !IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
-      !required_timeframes = 2
-    !ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial_time') THEN
-        !required_timeframes = 3 
-    !ELSE
-    !END IF
-
     ! Perform time interpolation
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
       CALL linear_time_interpolation(mesh, ocean, matrix, time)
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial_time') THEN
-        CALL crash('Polynomial interpolation not implemented yet')
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_radiative_based') THEN
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_radiative') THEN
       CALL interpolation_with_GHG_radiative(mesh, ocean, matrix, time)
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_based') THEN
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG') THEN
       CALL interpolation_with_GHG_basic(mesh, ocean, matrix, time)
     ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation') THEN
       CALL interpolation_with_insolation(mesh, ocean, matrix, time)
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'd18O') THEN
+      CALL interpolation_with_d18O(mesh, ocean, matrix, time)
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'anomaly_field') THEN
+      CALL apply_anomaly_fields(mesh, ocean, matrix, time)
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation+GHG') THEN
+      CALL interpolation_with_insolation_and_GHG(mesh, ocean, matrix, time)
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation+GHG_radiative') THEN
+      CALL interpolation_with_insolation_and_GHG_radiative(mesh, ocean, matrix, time)
     ELSE
         CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
@@ -867,10 +1466,10 @@ MODULE ocean_matrix
   
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model_matrix'
-    CHARACTER(LEN=256)                                    :: filename1, filename2
+    CHARACTER(LEN=256)                                    :: filename1, filename2, filename_insolation, filename_tas, filename_sos
     INTEGER                                               :: i, j
-    !INTEGER                                               :: ndepth
-    !REAL(dp), DIMENSION(:), ALLOCATABLE                   :: depth
+    REAL(dp)                                              :: time_to_read_ins_PI, time_to_read_ins_LGM, time_to_read_tas, time_to_read_sos
+    TYPE(type_ocean_matrix_interpolation)                 :: matrix
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -880,51 +1479,81 @@ MODULE ocean_matrix
       colour_string( TRIM( C%choice_ocean_model_matrix),'light blue') // '"...'
 
     ! Start and ending of simulation
-    ocean%matrix%t0 = REAL(C%start_time_of_run, dp)     ! LGM
-    ocean%matrix%t1 = REAL(C%end_time_of_run, dp)       ! PI
-
-    ! Possibility to hardcode the depth, should then be called in read_field_from_file_3D_ocean command
-    !ndepth = 11
-    !ALLOCATE(depth(ndepth))
-    !depth = (/0.0_dp, 150.0_dp, 300.0_dp, 450.0_dp, 600.0_dp, 750.0_dp, 900.0_dp, &
-              !1050.0_dp, 1200.0_dp, 1350.0_dp, 1500.0_dp/)
+    ocean%matrix%t0 = REAL(C%start_time_of_run, dp)     ! PI
+    ocean%matrix%t1 = REAL(C%end_time_of_run, dp)       ! LGM
 
     ! Allocate memory for timeframes' T and S array if not already allocated
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe0%T)) THEN
+    IF (.NOT. ALLOCATED(ocean%matrix%timeframe0%T)) THEN       ! PI
       ALLOCATE(ocean%matrix%timeframe0%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
       ALLOCATE(ocean%matrix%timeframe0%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-    END IF
-    IF (.NOT. ALLOCATED(ocean%matrix%timeframe1%T)) THEN
-      ALLOCATE(ocean%matrix%timeframe1%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
+    END IF 
+    IF (.NOT. ALLOCATED(ocean%matrix%timeframe1%T)) THEN       ! LGM
+      ALLOCATE(ocean%matrix%timeframe1%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))                                                 
       ALLOCATE(ocean%matrix%timeframe1%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))      
     END IF
 
-    ! Construct filenames for the two ocean snapshots
-    filename1 = TRIM(C%filename_ocean_matrix_base1) ! LGM
-    filename2 = TRIM(C%filename_ocean_matrix_base2) ! PI
+    ! Construct filenames
+    filename1            = TRIM(C%filename_ocean_matrix_base1) ! Snapshot PI
+    filename2            = TRIM(C%filename_ocean_matrix_base2) ! Snapshot LGM
+    filename_tas         = TRIM(C%filename_tas)                ! Anomaly field T
+    filename_sos         = TRIM(C%filename_sos)                ! Anomaly field S
 
     ! Read the ocean snapshots
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_T_ocean, mesh, ocean%matrix%timeframe0%T)
-    CALL read_field_from_file_3D_ocean(filename1, field_name_options_S_ocean, mesh, ocean%matrix%timeframe0%S)
-    CALL read_field_from_file_3D_ocean(filename2, field_name_options_T_ocean, mesh, ocean%matrix%timeframe1%T)
-    CALL read_field_from_file_3D_ocean(filename2, field_name_options_S_ocean, mesh, ocean%matrix%timeframe1%S)
+    CALL read_field_from_file_3D_ocean(filename1, 't_an', mesh, ocean%matrix%timeframe0%T) ! Ocean T PI
+    CALL read_field_from_file_3D_ocean(filename1, 's_an', mesh, ocean%matrix%timeframe0%S) ! Ocean S PI
+    CALL read_field_from_file_3D_ocean(filename2, 't_an', mesh, ocean%matrix%timeframe1%T) ! Ocean T LGM
+    CALL read_field_from_file_3D_ocean(filename2, 's_an', mesh, ocean%matrix%timeframe1%S) ! Ocean S LGM
 
-    ! Ensure correct model choice
+    ! Print difference snapshots
+    IF (par%master) THEN
+      WRITE(*, *) 'Snapshot difference:'
+      WRITE(*, *) 'Max T difference:', MAXVAL(ABS(ocean%matrix%timeframe0%T - ocean%matrix%timeframe1%T))
+      WRITE(*, *) 'Max S difference:', MAXVAL(ABS(ocean%matrix%timeframe0%S - ocean%matrix%timeframe1%S))
+    END IF
+
+    ! Ensure correct model choice and load in files if necessary
     IF (TRIM(C%choice_ocean_model_matrix) == 'linear_time') THEN
-      ! Check
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'polynomial_time') THEN
-      CALL crash('Polynomial interpolation not implemented yet')
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_radiative_based') THEN
-      ! Check
-    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_based') THEN
-      ! Check
+      ! Weight variables in time, no specific intialisation necessary
+
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG_radiative') THEN
+      ! Global weight variables, no specific intialisation necessary
+
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'GHG') THEN
+      ! Global weight variables, no specific intialisation necessary
+
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'd18O') THEN
+      ! Global weight variables, no specific initialisation necessary
+
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'anomaly_field') THEN
+      ! Allocate arrays for anomaly fields at PI and LGM
+      IF (.NOT. ALLOCATED(ocean%matrix%tas)) THEN
+        ALLOCATE(ocean%matrix%tas(mesh%vi1:mesh%vi2))
+      END IF
+      IF (.NOT. ALLOCATED(ocean%matrix%sos)) THEN
+        ALLOCATE(ocean%matrix%sos(mesh%vi1:mesh%vi2))
+      END IF 
+      ! Read anomaly fields
+      CALL read_field_from_file_2D(filename_tas, 'tas', mesh, ocean%matrix%tas) ! Ocean T
+      CALL read_field_from_file_2D(filename_sos, 'sos', mesh, ocean%matrix%sos) ! Ocean S 
+      WRITE(*, *) 'Lowest T anomaly:', MINVAL(ocean%matrix%tas)
+      WRITE(*, *) 'Highest T anomaly:', MAXVAL(ocean%matrix%tas)
+      WRITE(*, *) 'Lowest S anomaly:', MINVAL(ocean%matrix%sos)
+      WRITE(*, *) 'Highest S anomaly:', MAXVAL(ocean%matrix%sos)
+
     ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation') THEN
-      ! Check
+      CALL initialise_insolation_fields(mesh, ocean, matrix)
+
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation+GHG') THEN
+      CALL initialise_insolation_fields(mesh, ocean, matrix)
+
+    ELSE IF (TRIM(C%choice_ocean_model_matrix) == 'insolation+GHG_radiative') THEN
+      CALL initialise_insolation_fields(mesh, ocean, matrix)
+
     ELSE
       CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
     END IF
 
-    ! Prescribe initial ocean state
+    ! Prescribe initial ocean state (start from PI snapshot)
     DO i = mesh%vi1, mesh%vi2
       DO j = 1, C%nz_ocean
         ocean%T(i,j) = ocean%matrix%timeframe0%T(i,j)
@@ -936,5 +1565,49 @@ MODULE ocean_matrix
     CALL finalise_routine( routine_name)
   
   END SUBROUTINE initialise_ocean_model_matrix
+
+  SUBROUTINE initialise_insolation_fields(mesh, ocean, matrix)
+    ! Initialize the insolation fields Q_TOA_PI and Q_TOA_LGM for the ocean model.
+
+    IMPLICIT NONE
+
+    ! In/output variables:
+    TYPE(type_mesh),                        INTENT(IN)    :: mesh
+    TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
+    TYPE(type_ocean_matrix_interpolation),  INTENT(IN)    :: matrix
+
+    ! Local variables:
+    CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_insolation_fields'
+    CHARACTER(LEN=256)                                    :: filename_insolation
+    REAL(dp)                                              :: time_to_read_ins_PI, time_to_read_ins_LGM
+
+    ! Begin initialization routine
+    CALL init_routine(routine_name)
+
+    filename_insolation  = TRIM(C%filename_insolation) 
+    time_to_read_ins_PI  = 0_dp                                ! Insolation PI
+    time_to_read_ins_LGM = -21000_dp                           ! Insolation LGM
+
+    ! Allocate arrays for insolation at PI and LGM
+    IF (.NOT. ALLOCATED(ocean%matrix%Q_TOA_PI)) THEN
+      ALLOCATE(ocean%matrix%Q_TOA_PI(mesh%vi1:mesh%vi2))
+    END IF
+    IF (.NOT. ALLOCATED(ocean%matrix%Q_TOA_LGM)) THEN
+      ALLOCATE(ocean%matrix%Q_TOA_LGM(mesh%vi1:mesh%vi2))
+    END IF
+
+    ! Read fields at PI and LGM, starts at 2000 AD (Laskar solution starts at 2000 AD and is in 1ka timesteps)
+    CALL read_field_from_file_2D(filename_insolation, 'Q_TOA', mesh, ocean%matrix%Q_TOA_PI, time_to_read_ins_PI)   ! PI  ! Fix dimensions reading
+    CALL read_field_from_file_2D(filename_insolation, 'Q_TOA', mesh, ocean%matrix%Q_TOA_LGM, time_to_read_ins_LGM) ! LGM ! Fix dimensions reading
+
+    WRITE(*, *) 'Lowest Q_TOA_PI:', MINVAL(ocean%matrix%Q_TOA_PI)
+    WRITE(*, *) 'Highest Q_TOA_PI:', MAXVAL(ocean%matrix%Q_TOA_PI)
+    WRITE(*, *) 'Lowest Q_TOA_LGM:', MINVAL(ocean%matrix%Q_TOA_LGM)
+    WRITE(*, *) 'Highest Q_TOA_LGM:', MAXVAL(ocean%matrix%Q_TOA_LGM)
+
+    ! Finalize the initialization routine
+    CALL finalise_routine(routine_name)
+
+  END SUBROUTINE initialise_insolation_fields
 
 END MODULE ocean_matrix
