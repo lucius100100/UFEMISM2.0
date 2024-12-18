@@ -210,9 +210,6 @@ contains
     ! Add routine to path
     call init_routine( routine_name)
 
-    WRITE(*,*) 'Size of d_grid_vec_partial:', size(d_grid_vec_partial)
-    WRITE(*,*) 'Expected size (grid%n_loc):', grid%n_loc
-
     ! Safety
     if (size( d_mesh_partial,1) /= mesh%nV_loc .or. size( d_grid_vec_partial,1) /= grid%n_loc) then
       call crash('data fields are the wrong size!')

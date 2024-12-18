@@ -710,6 +710,7 @@ MODULE model_configuration
     ! Paths to files containing fields for matrix ocean linear time interpolation
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1_config           = ''
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2_config           = ''
+    LOGICAL             :: enable_jourdain_config                       = .TRUE.                            ! Option for sub-shelf extrapolation (method by Jourdain et al., 2020)
 
     ! Insolation forcing (NetCDF)
     CHARACTER(LEN=256)  :: choice_insolation_forcing_config             = ''                               ! Choice of insolation forcing: "none", "static", "realistic"
@@ -1704,6 +1705,7 @@ MODULE model_configuration
     ! Paths to files containing fields for matrix ocean
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1  
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2 
+    LOGICAL             :: enable_jourdain                      
 
     ! Insolation forcing (NetCDF)
     CHARACTER(LEN=256)  :: choice_insolation_forcing 
@@ -2672,6 +2674,7 @@ CONTAINS
       clamp_cutoff_high_config                                    , &
       filename_ocean_matrix_base1_config                          , &
       filename_ocean_matrix_base2_config                          , &
+      enable_jourdain_config                                      , &
       choice_insolation_forcing_config                            , &
       static_insolation_time_config                               , &   
       filename_insolation_config                                  , & 
@@ -3589,6 +3592,7 @@ CONTAINS
     ! Paths to files containing fields for matrix ocean
     C%filename_ocean_matrix_base1                            = filename_ocean_matrix_base1_config
     C%filename_ocean_matrix_base2                            = filename_ocean_matrix_base2_config
+    C%enable_jourdain                                        = enable_jourdain_config
 
     ! Insolation forcing (NetCDF)
     C%choice_insolation_forcing                              = choice_insolation_forcing_config

@@ -46,9 +46,9 @@ MODULE netcdf_basic
   CHARACTER(LEN=256), PARAMETER :: field_name_options_x              = 'x||X||x1||X1||nx||NX||x-coordinate||X-coordinate||easting||Easting'
   CHARACTER(LEN=256), PARAMETER :: field_name_options_y              = 'y||Y||y1||Y1||ny||NY||y-coordinate||Y-coordinate||northing||Northing'
   CHARACTER(LEN=256), PARAMETER :: field_name_options_zeta           = 'zeta||Zeta'
-  CHARACTER(LEN=256), PARAMETER :: field_name_options_lon            = 'lon||Lon||long||Long||longitude||Longitude'
-  CHARACTER(LEN=256), PARAMETER :: field_name_options_lat            = 'lat||Lat||latitude||Latitude'
-  CHARACTER(LEN=256), PARAMETER :: field_name_options_time           = 'time||Time||t||nt'
+  CHARACTER(LEN=256), PARAMETER :: field_name_options_lon            = 'lon||Lon||long||Long||longitude||Longitude||longitudes'
+  CHARACTER(LEN=256), PARAMETER :: field_name_options_lat            = 'lat||Lat||latitude||Latitude||latitudes'
+  CHARACTER(LEN=256), PARAMETER :: field_name_options_time           = 'time||Time||t||nt||times'
   CHARACTER(LEN=256), PARAMETER :: field_name_options_month          = 'month||Month'
   CHARACTER(LEN=256), PARAMETER :: field_name_options_depth          = 'depth||Depth||lev'
 

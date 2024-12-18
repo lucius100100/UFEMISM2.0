@@ -27,8 +27,8 @@ MODULE ocean_model_types
     REAL(dp)                                :: t1                          ! End time for interpolation     
 
     ! Timeframes containing temperature and salinity data
-    TYPE(type_timeframe)                    :: timeframe0                  ! LGM
-    TYPE(type_timeframe)                    :: timeframe1                  ! PI      
+    TYPE(type_timeframe)                    :: timeframe0                  ! PI
+    TYPE(type_timeframe)                    :: timeframe1                  ! LGM     
     
     ! Insolation field
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: Q_TOA                       ! [W/m^2]           Insolation field
@@ -60,6 +60,10 @@ MODULE ocean_model_types
 
     ! Matrix component
     TYPE(type_ocean_matrix_interpolation)   :: matrix
+
+    ! Extrapolation masks
+    LOGICAL,  DIMENSION(:    ), ALLOCATABLE :: mask_ocean_T
+    LOGICAL,  DIMENSION(:    ), ALLOCATABLE :: mask_ocean_S
 
   END TYPE type_ocean_model
 

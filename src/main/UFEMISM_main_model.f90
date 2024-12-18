@@ -19,6 +19,7 @@ MODULE UFEMISM_main_model
   USE ice_model_types                                        , ONLY: type_ice_model
   USE mesh_types                                             , ONLY: type_mesh
   USE reference_geometry_types                               , ONLY: type_reference_geometry
+  USE ocean_model_types                                      , ONLY: type_ocean_model ! FIX
   USE reference_geometries                                   , ONLY: initialise_reference_geometries_raw, initialise_reference_geometries_on_model_mesh
   USE ice_model_main                                         , ONLY: initialise_ice_dynamics_model, run_ice_dynamics_model, remap_ice_dynamics_model, &
                                                                      create_restart_files_ice_model, write_to_restart_files_ice_model, apply_geometry_relaxation
@@ -76,6 +77,7 @@ CONTAINS
     INTEGER                                                            :: ndt_av
     REAL(dp)                                                           :: dt_av
     REAL(dp)                                                           :: mesh_fitness_coefficient
+    TYPE(type_ocean_model)                                             :: ocean ! FIX
 
     ! Add routine to path
     routine_name = 'run_model('  //  region%name  //  ')'
