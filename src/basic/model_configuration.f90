@@ -710,6 +710,8 @@ MODULE model_configuration
     ! Paths to files containing fields for matrix ocean linear time interpolation
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1_config           = ''
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2_config           = ''
+    REAL(dp)            :: scale_snapshot_T_config                      = 2._dp                            ! Option to manually offset snapshot variable
+    REAL(dp)            :: scale_snapshot_S_config                      = 0._dp                                
     LOGICAL             :: enable_jourdain_config                       = .TRUE.                            ! Option for sub-shelf extrapolation (method by Jourdain et al., 2020)
 
     ! Insolation forcing (NetCDF)
@@ -1705,6 +1707,8 @@ MODULE model_configuration
     ! Paths to files containing fields for matrix ocean
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1  
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2 
+    REAL(dp)            :: scale_snapshot_T        
+    REAL(dp)            :: scale_snapshot_S                                
     LOGICAL             :: enable_jourdain                      
 
     ! Insolation forcing (NetCDF)
@@ -2674,6 +2678,8 @@ CONTAINS
       clamp_cutoff_high_config                                    , &
       filename_ocean_matrix_base1_config                          , &
       filename_ocean_matrix_base2_config                          , &
+      scale_snapshot_T_config                                     , &
+      scale_snapshot_S_config                                     , &
       enable_jourdain_config                                      , &
       choice_insolation_forcing_config                            , &
       static_insolation_time_config                               , &   
@@ -3592,6 +3598,8 @@ CONTAINS
     ! Paths to files containing fields for matrix ocean
     C%filename_ocean_matrix_base1                            = filename_ocean_matrix_base1_config
     C%filename_ocean_matrix_base2                            = filename_ocean_matrix_base2_config
+    C%scale_snapshot_T                                       = scale_snapshot_T_config           
+    C%scale_snapshot_S                                       = scale_snapshot_S_config                               
     C%enable_jourdain                                        = enable_jourdain_config
 
     ! Insolation forcing (NetCDF)

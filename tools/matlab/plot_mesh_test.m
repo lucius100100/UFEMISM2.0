@@ -1,33 +1,28 @@
-%function plot_mesh_test
+clc
+clear all
+close all
 
-    clc
-    clear all
-    close all
-    
-    filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_ant_template_test\main_output_ANT_00001.nc";
-    
-    mesh = read_mesh_from_file(filename);
-    %plot_mesh(mesh);
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_anomaly_field\main_output_ANT_00001.nc";
 
-    time = ncread(filename, 'time');
-    ti = length(time);
+mesh = read_mesh_from_file(filename);
+%plot_mesh(mesh);
 
-    Hs = ncread(filename, 'Hs');
+time = ncread(filename, 'time');
+ti = length(time);
 
-    T_ocean = ncread(filename, 'T_ocean', [1,1,ti],[Inf,Inf,1]);
-    T_ocean1 = ncread(filename, 'T_ocean', [1,1,1],[Inf,Inf,1]);
-    ocean_T = T_ocean - T_ocean1;
+%Plot ice thickness difference (LGM-PI, positive = ice growth)
+Hi = ncread(filename, 'Hi');
+%plot_mesh_data(mesh, Hi(:, 2)-Hi(:, 1));
 
-    %plot_mesh_data(mesh, Hs(:, 2100) - Hs(:,1));
-    plot_mesh_data(mesh, ocean_T(:,1));
-    %plot_mesh_data(mesh, T_ocean(:,1));
-    %plot_mesh_data(mesh, Hs(:, 1));
-    
-    % diff = Hs(:,11) - Hs(:,1);
-    
-    % plot_mesh_data(mesh, diff);
-    
-    %bed_roughness = ncread(filename, 'bed_roughness');
-    %plot_mesh_data(mesh, bed_roughness(:,11));
-
-%end
+%Plot ocean temperature difference
+%T_ocean = ncread(filename, 'T_ocean', [1,1,ti],[Inf,Inf,1]);
+%T_ocean = ncread(filename, 'T_ocean');
+%T_ocean1 = ncread(filename, 'T_ocean', [1,1,1],[Inf,Inf,1]);
+%ocean_T = T_ocean - T_ocean1;
+%plot_mesh_data(mesh, ocean_T(:,1));
+depth_level = 1;
+T_ocean_t1 = ncread(filename, 'T_ocean', [1, depth_level, 1], [Inf, 1, 1]);
+T_ocean_t2 = ncread(filename, 'T_ocean', [1, depth_level, ti], [Inf, 1, 1]);
+T_diff = T_ocean_t2 - T_ocean_t1;
+%plot_mesh_data(mesh, T_diff);
+plot_mesh_data(mesh, T_ocean_t2);

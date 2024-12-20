@@ -1,4 +1,4 @@
-function plot_mesh_test
+%function plot_mesh_test
 
     clc
     clear all
@@ -16,16 +16,18 @@ function plot_mesh_test
 
     T_ocean = ncread(filename, 'T_ocean', [1,1,ti],[Inf,Inf,1]);
     T_ocean1 = ncread(filename, 'T_ocean', [1,1,1],[Inf,Inf,1]);
-    ocean_T = T_ocean - T_ocean1
+    ocean_T = T_ocean - T_ocean1;
 
-    plot_mesh_data(mesh, Hs(:, 2101) - Hs(:,1));
-    %plot_mesh_data(mesh, Hs(:, 1));
+    %plot_mesh_data(mesh, Hs(:, 2100) - Hs(:,1));
+    plot_mesh_data(mesh, ocean_T(:,1));
+    %plot_mesh_data(mesh, T_ocean(:,1));
+    plot_mesh_data(mesh, Hs(:, 22));
     
     % diff = Hs(:,11) - Hs(:,1);
     
     % plot_mesh_data(mesh, diff);
     
-    % bed_roughness = ncread(filename, 'bed_roughness');
-    % plot_mesh_data(mesh, bed_roughness(:,11));
+    %bed_roughness = ncread(filename, 'bed_roughness');
+    %plot_mesh_data(mesh, bed_roughness(:,11));
 
-end
+%end

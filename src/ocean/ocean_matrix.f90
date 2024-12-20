@@ -373,24 +373,22 @@ MODULE ocean_matrix
     REAL(dp)                                              :: w_global
     INTEGER                                               :: i, j, vi, k
     REAL(dp), DIMENSION(:), ALLOCATABLE                   :: tas, sos
+    REAL(dp)                                              :: wt0, wt1
   
     ! Add routine to path
     CALL init_routine( routine_name)
   
-    ! Calculate global transition weight
-    w_global = time / 21000.0_dp
-    
-    ! Fetch annual mean anomaly fields
-    tas = ocean%matrix%tas  ! Ocean T
-    sos = ocean%matrix%sos  ! Ocean S
-    
-    WRITE(*, *) 'Weight time:', w_global
+    ! Calculate weights for linear interpolation
+    wt0 = (ocean%matrix%t1 - time) / (ocean%matrix%t1 - ocean%matrix%t0)
+    wt1 = 1.0_dp - wt0
 
-    ! Apply scaled anomalies to PI snapshot to get current ocean state
+    print *, "Debug: interpolation weight calculated = ", wt0
+
+    ! Apply linear interpolation
     DO vi = mesh%vi1, mesh%vi2
         DO k = 1, C%nz_ocean
-            ocean%T(vi,k) = ocean%matrix%timeframe0%T(vi,k) + w_global * tas(i)
-            ocean%S(vi,k) = ocean%matrix%timeframe0%S(vi,k) + w_global * sos(i)
+            ocean%T(vi,k) = wt0 * ocean%matrix%timeframe0%T(vi,k) + wt1 * ocean%matrix%timeframe1%T(vi,k)
+            ocean%S(vi,k) = wt0 * ocean%matrix%timeframe0%S(vi,k) + wt1 * ocean%matrix%timeframe1%S(vi,k)
         END DO
     END DO
   
@@ -1530,6 +1528,7 @@ MODULE ocean_matrix
     INTEGER, ALLOCATABLE                                  :: mask_ocean_T(:), mask_ocean_S(:)
     LOGICAL, ALLOCATABLE                                  :: mask_icefree_ocean(:)
     TYPE(type_ice_model)                                  :: ice
+    REAL(dp)                                              :: scale_snapshot_T, scale_snapshot_S
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1582,6 +1581,10 @@ MODULE ocean_matrix
     filename_tas         = TRIM(C%filename_tas)                 ! Anomaly field T
     filename_sos         = TRIM(C%filename_sos)                 ! Anomaly field S
 
+    ! Set up scaling option
+    scale_snapshot_T = C%scale_snapshot_T
+    scale_snapshot_S = C%scale_snapshot_S
+
     ! Read the ocean snapshots
     CALL read_field_from_file_3D_ocean(filename1, 't_an', mesh, ocean%matrix%timeframe0%T) ! Ocean T PI
     CALL read_field_from_file_3D_ocean(filename1, 's_an', mesh, ocean%matrix%timeframe0%S) ! Ocean S PI
@@ -1594,7 +1597,7 @@ MODULE ocean_matrix
       ! Global weight variables or in time, no specific intialisation necessary
 
     CASE('anomaly_field')
-      ! Allocate arrays for anomaly fields at PI and LGM
+      ! Allocate arrays for anomaly fields
 
       IF (.NOT. ALLOCATED(ocean%matrix%tas) .AND. .NOT. ALLOCATED(ocean%matrix%sos)) THEN
         ALLOCATE(ocean%matrix%tas(mesh%vi1:mesh%vi2))
@@ -1608,6 +1611,18 @@ MODULE ocean_matrix
       WRITE(*, *) 'Highest T anomaly:', MAXVAL(ocean%matrix%tas)
       WRITE(*, *) 'Lowest S anomaly:', MINVAL(ocean%matrix%sos)
       WRITE(*, *) 'Highest S anomaly:', MAXVAL(ocean%matrix%sos)
+
+      ! Determine timeframe0 to be PI (LGM + anomaly)
+      DO vi = mesh%vi1, mesh%vi2
+        ocean%matrix%timeframe0%T(vi,1) = ocean%matrix%timeframe1%T(vi,1) - ocean%matrix%tas(vi)
+        ocean%matrix%timeframe0%S(vi,1) = ocean%matrix%timeframe1%S(vi,1) - ocean%matrix%sos(vi)
+      END DO
+
+      WRITE(*, *) 'Anomaly field min/max:'
+      PRINT *, "T min/max:", MINVAL(ocean%matrix%tas), MAXVAL(ocean%matrix%tas)
+      DO k = 1, C%nz_ocean
+        PRINT *, "Layer timeframe0", k, "T min/max:", MINVAL(ocean%matrix%timeframe0%T(:,k)), MAXVAL(ocean%matrix%timeframe0%T(:,k))
+      END DO
       
     CASE('insolation', 'insolation+GHG', 'insolation+GHG_radiative')
 
@@ -1622,6 +1637,14 @@ MODULE ocean_matrix
       DO k = 1, C%nz_ocean
         ocean%T(vi,k) = ocean%matrix%timeframe0%T(vi,k)
         ocean%S(vi,k) = ocean%matrix%timeframe0%S(vi,k)
+      END DO
+    END DO
+
+    ! Options to scale snapshot LGM
+    DO vi = mesh%vi1, mesh%vi2
+      DO k = 1, C%nz_ocean
+        ocean%matrix%timeframe1%T(vi,k) = ocean%matrix%timeframe1%T(vi,k) + scale_snapshot_T
+        ocean%matrix%timeframe1%S(vi,k) = ocean%matrix%timeframe1%S(vi,k) + scale_snapshot_S
       END DO
     END DO
 
