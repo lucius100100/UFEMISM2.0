@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_linear_time_no_ghf_higher_resolution_enable_jourdain_10000_test_implicit\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_linear_time_higher_resolution_enable_jourdain_2000_test_implicit\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -28,16 +28,16 @@ T_ocean_t2 = ncread(filename, 'T_ocean', [1, depth_level, ti], [Inf, 1, 1]);
 T_diff = T_ocean_t2 - T_ocean_t1;
 
 % Mask values:
-% type_icefree_land                        = 1
-% type_icefree_ocean                       = 2
-% type_grounded_ice                        = 3
-% type_floating_ice                        = 4
-% type_groundingline_gr                    = 5
-% type_groundingline_fl                    = 6
-% type_calvingfront_gr                     = 7
-% type_calvingfront_fl                     = 8
-% type_margin                              = 9
-% type_coastline                           = 10
+% icefree_land                        = 1
+% icefree_ocean                       = 2
+% grounded_ice                        = 3
+% floating_ice                        = 4
+% groundingline_gr                    = 5
+% groundingline_fl                    = 6
+% calvingfront_gr                     = 7
+% calvingfront_fl                     = 8
+% margin                              = 9
+% coastline                           = 10
 
 %read masks (time, vi)
 mask_initial = ncread(filename, 'mask', [1, 1], [Inf, 1]);

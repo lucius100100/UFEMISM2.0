@@ -1493,7 +1493,7 @@ MODULE ocean_matrix
       ! Initialize mask
       mask_ocean = 0
       
-      ! Set basic mask (2 = seed points, 1 = extrapolation points, 0 = ignore)
+      ! Set basic mask (3 = horizontally extrapolated points, 2 = seed points, 1 = extrapolation points, 0 = ignore)
       DO vi = mesh%vi1, mesh%vi2
           IF (ice%mask_icefree_ocean(vi)) THEN
               mask_ocean(vi) = 2      ! Open ocean: use as seed
@@ -1519,7 +1519,7 @@ MODULE ocean_matrix
           WRITE(*,*) '  - Sigma:', sigma
       END IF
       
-      ! Extrapolate each vertical layer independently
+      ! Step 1: horizontal extrapolation into shelf cavities
       DO k = 1, C%nz_ocean
           ! Store current layer values
           T_field = ocean%T(:,k)
@@ -1534,10 +1534,22 @@ MODULE ocean_matrix
               IF (mask_ocean(vi) == 1) THEN
                   ocean%T(vi,k) = T_field(vi)
                   ocean%S(vi,k) = S_field(vi)
+                  ! After extrapolation mark as seed for vertical extrapolation
+                  mask_ocean(vi) = 3  
               END IF
           END DO
       END DO
-      
+
+      ! Step 2: vertical extrapolation into sill-blocked shelf cavities
+      DO vi = mesh%vi1, mesh%vi2
+          IF (mask_ocean(vi) == 3) THEN
+              DO k = 2, C%nz_ocean
+                  ocean%T(vi,k) = ocean%T(vi,k-1)
+                  ocean%S(vi,k) = ocean%S(vi,k-1)
+              END DO
+          END IF
+      END DO
+
     END IF
 
     ! Finalise routine path
@@ -1621,7 +1633,7 @@ MODULE ocean_matrix
     ! Ensure correct model choice and load in files if necessary
     SELECT CASE (TRIM(C%choice_ocean_model_matrix))
     CASE('linear_time', 'GHG_radiative', 'GHG', 'd18O')
-      ! Global weight variables or in time, no specific intialisation necessary
+      ! Global weight variables or time, no specific intialisation necessary
 
     CASE('anomaly_field')
       ! Allocate arrays for anomaly fields
