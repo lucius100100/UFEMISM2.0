@@ -701,8 +701,13 @@ MODULE model_configuration
 
     ! Choice of matrix ocean model
     CHARACTER(LEN=256)  :: choice_ocean_model_matrix_config             = ''                               ! Choice of interpolation: "linear_time", "GHG_radiative_based", "GHG_based", "insolation", "d18O"
+    
+    ! Choice of GHG interpolation
+    CHARACTER(LEN=256)  :: filename_ghg_concentrations_config           = ''
     CHARACTER(LEN=256)  :: choice_ghg_inclusion_config                  = ''                               ! Choice of GHG interpolation: "CO2", "CO2_CH4" ,"CO2_CH4_N2O"
     CHARACTER(LEN=256)  :: choice_CO2_relationship_config               = ''                               ! Options: "relationship1", "relationship2", "relationship3"
+    
+    ! Clamp weights
     LOGICAL             :: clamp_weights_config                         = .FALSE.                          ! Clamp weights to allow for colder or warmer than snapshot conditions: ".TRUE.", ".FALSE."
     REAL(dp)            :: clamp_cutoff_low_config                      = 0._dp
     REAL(dp)            :: clamp_cutoff_high_config                     = 1._dp
@@ -710,9 +715,11 @@ MODULE model_configuration
     ! Paths to files containing fields for matrix ocean linear time interpolation
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1_config           = ''
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2_config           = ''
-    REAL(dp)            :: scale_snapshot_T_config                      = 2._dp                            ! Option to manually offset snapshot variable
-    REAL(dp)            :: scale_snapshot_S_config                      = 0._dp                                
-    LOGICAL             :: enable_jourdain_config                       = .TRUE.                            ! Option for sub-shelf extrapolation (method by Jourdain et al., 2020)
+    REAL(dp)            :: scale_snapshot_LGM_T_config                  = 0._dp                            ! Option to manually offset snapshot variable LGM
+    REAL(dp)            :: scale_snapshot_LGM_S_config                  = 0._dp                                
+    REAL(dp)            :: scale_snapshot_PI_T_config                   = 0._dp                            ! Option to manually offset snapshot variable PI
+    REAL(dp)            :: scale_snapshot_PI_S_config                   = 0._dp                                
+    LOGICAL             :: enable_jourdain_config                       = .TRUE.                           ! Option for sub-shelf extrapolation (method by Jourdain et al., 2020)
 
     ! Insolation forcing (NetCDF)
     CHARACTER(LEN=256)  :: choice_insolation_forcing_config             = ''                               ! Choice of insolation forcing: "none", "static", "realistic"
@@ -1698,8 +1705,13 @@ MODULE model_configuration
 
     ! Choice of matrix ocean model
     CHARACTER(LEN=256)  :: choice_ocean_model_matrix
+
+    ! Choice of GHG interpolation
+    CHARACTER(LEN=256)  :: filename_ghg_concentrations
     CHARACTER(LEN=256)  :: choice_ghg_inclusion
     CHARACTER(LEN=256)  :: choice_CO2_relationship
+
+    ! Clamp weights
     LOGICAL             :: clamp_weights
     REAL(dp)            :: clamp_cutoff_low
     REAL(dp)            :: clamp_cutoff_high
@@ -1707,8 +1719,10 @@ MODULE model_configuration
     ! Paths to files containing fields for matrix ocean
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base1  
     CHARACTER(LEN=256)  :: filename_ocean_matrix_base2 
-    REAL(dp)            :: scale_snapshot_T        
-    REAL(dp)            :: scale_snapshot_S                                
+    REAL(dp)            :: scale_snapshot_LGM_T        
+    REAL(dp)            :: scale_snapshot_LGM_S         
+    REAL(dp)            :: scale_snapshot_PI_T        
+    REAL(dp)            :: scale_snapshot_PI_S                         
     LOGICAL             :: enable_jourdain                      
 
     ! Insolation forcing (NetCDF)
@@ -2671,6 +2685,7 @@ CONTAINS
       filename_ocean_snapshot_GRL_config                          , &
       filename_ocean_snapshot_ANT_config                          , &
       choice_ocean_model_matrix_config                            , &
+      filename_ghg_concentrations_config                          , &
       choice_ghg_inclusion_config                                 , &
       choice_CO2_relationship_config                              , &
       clamp_weights_config                                        , &
@@ -2678,8 +2693,10 @@ CONTAINS
       clamp_cutoff_high_config                                    , &
       filename_ocean_matrix_base1_config                          , &
       filename_ocean_matrix_base2_config                          , &
-      scale_snapshot_T_config                                     , &
-      scale_snapshot_S_config                                     , &
+      scale_snapshot_LGM_T_config                                 , &
+      scale_snapshot_LGM_S_config                                 , &
+      scale_snapshot_PI_T_config                                  , &
+      scale_snapshot_PI_S_config                                  , &
       enable_jourdain_config                                      , &
       choice_insolation_forcing_config                            , &
       static_insolation_time_config                               , &   
@@ -3589,8 +3606,13 @@ CONTAINS
 
     ! Choice of matrix ocean model
     C%choice_ocean_model_matrix                              = choice_ocean_model_matrix_config
+
+    ! Choice GHG interpolation
+    C%filename_ghg_concentrations                            = filename_ghg_concentrations_config
     C%choice_ghg_inclusion                                   = choice_ghg_inclusion_config
     C%choice_CO2_relationship                                = choice_CO2_relationship_config
+
+    ! Clamp weights
     C%clamp_weights                                          = clamp_weights_config
     C%clamp_cutoff_low                                       = clamp_cutoff_low_config
     C%clamp_cutoff_high                                      = clamp_cutoff_high_config
@@ -3598,8 +3620,10 @@ CONTAINS
     ! Paths to files containing fields for matrix ocean
     C%filename_ocean_matrix_base1                            = filename_ocean_matrix_base1_config
     C%filename_ocean_matrix_base2                            = filename_ocean_matrix_base2_config
-    C%scale_snapshot_T                                       = scale_snapshot_T_config           
-    C%scale_snapshot_S                                       = scale_snapshot_S_config                               
+    C%scale_snapshot_LGM_T                                   = scale_snapshot_LGM_T_config           
+    C%scale_snapshot_LGM_S                                   = scale_snapshot_LGM_S_config  
+    C%scale_snapshot_PI_T                                    = scale_snapshot_PI_T_config           
+    C%scale_snapshot_PI_S                                    = scale_snapshot_PI_S_config                               
     C%enable_jourdain                                        = enable_jourdain_config
 
     ! Insolation forcing (NetCDF)

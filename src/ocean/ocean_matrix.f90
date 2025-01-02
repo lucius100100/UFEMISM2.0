@@ -8,7 +8,7 @@ MODULE ocean_matrix
   ! List of forcing:
   ! GHG concentrations (CO2, CH4, N2O) https://www.ipcc.ch/site/assets/uploads/2018/03/TAR-06.pdf
   ! Insolation variation
-  ! Ocean circulation (?) https://cp.copernicus.org/articles/19/1081/2023/cp-19-1081-2023.pdf  CH4 and Antarctic Circumpolar Current (ACC) (?)
+  ! Ocean circulation (?) https://cp.copernicus.org/articles/19/1081/2023/cp-19-1081-2023.pdf   Antarctic Circumpolar Current (ACC) (?)
   ! Freshwater flux
   ! T and S relationship (empirical relation?)
 
@@ -28,6 +28,7 @@ MODULE ocean_matrix
     USE mesh_types                                             , ONLY: type_mesh
     USE ice_model_types                                        , ONLY: type_ice_model
     USE ocean_model_types                                      , ONLY: type_ocean_model, type_ocean_matrix_interpolation
+    USE region_types                                           , ONLY: type_model_region
     USE netcdf_input                                           , ONLY: read_field_from_file_3D_ocean, read_field_from_file_2D
     USE netcdf_basic                                           , ONLY: field_name_options_T_ocean, field_name_options_S_ocean
     USE ocean_utilities                                        , ONLY: debug_ocean_matrix_state, initialise_ocean_vertical_grid
@@ -67,7 +68,7 @@ MODULE ocean_matrix
 
     ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
     CALL get_d18O_values(time, d18O_current)    ! d18O during runtime
-    CALL get_d18O_values(100.0_dp, d18O_PI)     ! PI
+    CALL get_d18O_values(0.0_dp, d18O_PI)     ! PI
     CALL get_d18O_values(21000.0_dp, d18O_LGM)  ! LGM
 
     print *, "d18O current = ", d18O_current
@@ -80,7 +81,7 @@ MODULE ocean_matrix
       w_d18O = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_d18O))
     END IF
 
-    print *, "Interpolation weight calculated = ", w_d18O
+    print *, "Interpolation weight calculated = ", 1.0_dp - w_d18O
 
     ! Apply interpolation using w_d18O and scaling
     DO vi = mesh%vi1, mesh%vi2
@@ -317,6 +318,7 @@ MODULE ocean_matrix
     idx_low = -1
     idx_high = -1
 
+    ! Edge cases
     IF (time <= age_data(1)) THEN
         ! Time is before the first data point
         idx_low = 1
@@ -325,6 +327,7 @@ MODULE ocean_matrix
         ! Time is after the last data point
         idx_low = num_points
         idx_high = num_points
+    ! Main data search
     ELSE
         ! Time is within the data range
         DO i = 1, num_points - 1
@@ -349,7 +352,7 @@ MODULE ocean_matrix
         fraction = (time - t_low) / (t_high - t_low)
     END IF
 
-    ! Interpolate d18O values
+    ! Interpolate d18O values to match d18O values to model runtime
     d18O_current = delta18O_data(idx_low) + fraction * (delta18O_data(idx_high) - delta18O_data(idx_low))
 
     ! Finalise routine path
@@ -382,7 +385,7 @@ MODULE ocean_matrix
     wt0 = (ocean%matrix%t1 - time) / (ocean%matrix%t1 - ocean%matrix%t0)
     wt1 = 1.0_dp - wt0
 
-    print *, "Debug: interpolation weight calculated = ", wt0
+    print *, "Interpolation weight calculated = ", wt0
 
     ! Apply linear interpolation
     DO vi = mesh%vi1, mesh%vi2
@@ -413,9 +416,8 @@ MODULE ocean_matrix
     INTEGER                                               :: i, j, vi, k
     ! Insolation
     REAL(dp), DIMENSION(:), ALLOCATABLE                   :: ins_current, w_ins
-    CHARACTER(LEN=256)                                    :: choice_insolation_forcing
+    CHARACTER(LEN=256)                                    :: choice_insolation_forcing, filename_insolation
     REAL(dp)                                              :: time_to_read
-    CHARACTER(LEN=256)                                    :: filename_insolation
     LOGICAL                                               :: apply_forcing
     ! GHG
     REAL(dp)                                              :: w_GHG
@@ -426,8 +428,7 @@ MODULE ocean_matrix
     REAL(dp)                                              :: DeltaF_CO2_PI, DeltaF_CH4_PI, DeltaF_N2O_PI
     REAL(dp)                                              :: DeltaF_CO2_LGM, DeltaF_CH4_LGM, DeltaF_N2O_LGM
     REAL(dp)                                              :: DeltaF_total, DeltaF_PI, DeltaF_LGM
-    CHARACTER(LEN=256)                                    :: CO2_relationship
-    CHARACTER(LEN=256)                                    :: GHG_inclusion
+    CHARACTER(LEN=256)                                    :: CO2_relationship, GHG_inclusion
     REAL(dp), DIMENSION(:), ALLOCATABLE                   :: w_tot
 
     ! Add routine to path
@@ -471,21 +472,29 @@ MODULE ocean_matrix
       ! Read insolation field at the determined time
       CALL read_field_from_file_2D(TRIM(filename_insolation), 'Q_TOA', mesh, ins_current, time_to_read = time_to_read)
   
-      ! Compute w_ins
-      w_ins = (ins_current - ocean%matrix%Q_TOA_PI) / (ocean%matrix%Q_TOA_LGM - ocean%matrix%Q_TOA_PI)
-  
-      ! Handle division by zero 
+      ! Compute w_ins for each mesh point
       DO vi = mesh%vi1, mesh%vi2
-        IF (ABS(ocean%matrix%Q_TOA_LGM(i) - ocean%matrix%Q_TOA_PI(i)) < 1e-5_dp) THEN
-          w_ins(i) = 0.0_dp
+        ! w_ins = (I_current - I_LGM) / (I_PI - I_LGM)
+        w_ins(vi) = (ins_current(vi) - ocean%matrix%Q_TOA_LGM(vi)) / (ocean%matrix%Q_TOA_PI(vi) - ocean%matrix%Q_TOA_LGM(vi))
+
+        ! Handle division by zero or very small denominators
+        IF (ABS(ocean%matrix%Q_TOA_PI(vi) - ocean%matrix%Q_TOA_LGM(vi)) < 1E-5_dp) THEN
+          w_ins(vi) = 0.0_dp
         END IF
       END DO
+  
+      ! Clamp weights between cutoff values if enabled
+      IF (C%clamp_weights) THEN
+        DO vi = mesh%vi1, mesh%vi2
+          w_ins(vi) = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_ins(vi)))
+        END DO
+      END IF
   
       ! ======================================= w_GHG =======================================
 
       ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
       CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
-      CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)
+      CALL get_GHG_concentrations(0.0_dp, CO2_PI, CH4_PI, N2O_PI)
       CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)
 
       ! Get config settings
@@ -534,8 +543,9 @@ MODULE ocean_matrix
       w_GHG = (DeltaF_total - DeltaF_LGM) / (DeltaF_PI - DeltaF_LGM)
 
       ! ======================================= w_tot =======================================
-  
-      w_tot(i) = (w_ins(i) + w_GHG) / 2
+      DO vi = mesh%vi1, mesh%vi2
+        w_tot(vi) = (w_ins(vi) + w_GHG) / 2
+      END DO
 
       ! Clamp weights between cutoff values if enabled
       IF (C%clamp_weights) THEN
@@ -547,8 +557,8 @@ MODULE ocean_matrix
       ! Apply interpolation using w_tot
       DO vi = mesh%vi1, mesh%vi2
         DO k = 1, C%nz_ocean
-          ocean%T(vi,k) = w_tot(i) * ocean%matrix%timeframe1%T(vi,k) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%T(vi,k)
-          ocean%S(vi,k) = w_tot(i) * ocean%matrix%timeframe1%S(vi,k) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%S(vi,k)
+          ocean%T(vi,k) = w_tot(vi) * ocean%matrix%timeframe1%T(vi,k) + (1.0_dp - w_tot(vi)) * ocean%matrix%timeframe0%T(vi,k)
+          ocean%S(vi,k) = w_tot(vi) * ocean%matrix%timeframe1%S(vi,k) + (1.0_dp - w_tot(vi)) * ocean%matrix%timeframe0%S(vi,k)
         END DO
       END DO
   
@@ -582,9 +592,8 @@ MODULE ocean_matrix
     INTEGER                                               :: i, j, vi, k
     ! Insolation
     REAL(dp), DIMENSION(:), ALLOCATABLE                   :: ins_current, w_ins
-    CHARACTER(LEN=256)                                    :: choice_insolation_forcing
+    CHARACTER(LEN=256)                                    :: choice_insolation_forcing, filename_insolation
     REAL(dp)                                              :: time_to_read
-    CHARACTER(LEN=256)                                    :: filename_insolation
     LOGICAL                                               :: apply_forcing
     ! GHG
     REAL(dp)                                              :: w_GHG, w_GHG_CO2, w_GHG_CH4, w_GHG_N2O
@@ -635,21 +644,29 @@ MODULE ocean_matrix
       ! Read insolation field at the determined time
       CALL read_field_from_file_2D(TRIM(filename_insolation), 'Q_TOA', mesh, ins_current, time_to_read = time_to_read)
   
-      ! Compute w_ins
-      w_ins = (ins_current - ocean%matrix%Q_TOA_PI) / (ocean%matrix%Q_TOA_LGM - ocean%matrix%Q_TOA_PI)
-  
-      ! Handle division by zero 
+      ! Compute w_ins for each mesh point
       DO vi = mesh%vi1, mesh%vi2
-        IF (ABS(ocean%matrix%Q_TOA_LGM(i) - ocean%matrix%Q_TOA_PI(i)) < 1e-5_dp) THEN
-          w_ins(i) = 0.0_dp
+        ! w_ins = (I_current - I_LGM) / (I_PI - I_LGM)
+        w_ins(vi) = (ins_current(vi) - ocean%matrix%Q_TOA_LGM(vi)) / (ocean%matrix%Q_TOA_PI(vi) - ocean%matrix%Q_TOA_LGM(vi))
+
+        ! Handle division by zero or very small denominators
+        IF (ABS(ocean%matrix%Q_TOA_PI(vi) - ocean%matrix%Q_TOA_LGM(vi)) < 1E-5_dp) THEN
+          w_ins(vi) = 0.0_dp
         END IF
       END DO
+  
+      ! Clamp weights between cutoff values if enabled
+      IF (C%clamp_weights) THEN
+        DO vi = mesh%vi1, mesh%vi2
+          w_ins(vi) = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_ins(vi)))
+        END DO
+      END IF
   
       ! ======================================= w_GHG =======================================
 
       ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
       CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)  ! Concentration during runtime
-      CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)             ! PI
+      CALL get_GHG_concentrations(0.0_dp, CO2_PI, CH4_PI, N2O_PI)             ! PI
       CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)        ! LGM
   
       ! Get config settings
@@ -690,7 +707,9 @@ MODULE ocean_matrix
 
       ! ======================================= w_tot =======================================
   
-      w_tot(i) = (w_ins(i) + w_GHG) / 2
+      DO vi = mesh%vi1, mesh%vi2
+        w_tot(vi) = (w_ins(vi) + w_GHG) / 2
+      END DO
 
       ! Clamp weights between cutoff values if enabled
       IF (C%clamp_weights) THEN
@@ -702,8 +721,8 @@ MODULE ocean_matrix
       ! Apply interpolation using w_tot
       DO vi = mesh%vi1, mesh%vi2
         DO k = 1, C%nz_ocean
-          ocean%T(vi,k) = w_tot(i) * ocean%matrix%timeframe1%T(vi,k) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%T(vi,k)
-          ocean%S(vi,k) = w_tot(i) * ocean%matrix%timeframe1%S(vi,k) + (1.0_dp - w_tot(i)) * ocean%matrix%timeframe0%S(vi,k)
+          ocean%T(vi,k) = w_tot(vi) * ocean%matrix%timeframe1%T(vi,k) + (1.0_dp - w_tot(vi)) * ocean%matrix%timeframe0%T(vi,k)
+          ocean%S(vi,k) = w_tot(vi) * ocean%matrix%timeframe1%S(vi,k) + (1.0_dp - w_tot(vi)) * ocean%matrix%timeframe0%S(vi,k)
         END DO
       END DO
   
@@ -736,10 +755,11 @@ MODULE ocean_matrix
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'interpolation_with_insolation'
     INTEGER                                               :: i, j, vi, k
     REAL(dp), DIMENSION(:), ALLOCATABLE                   :: ins_current, w_ins
-    CHARACTER(LEN=256)                                    :: choice_insolation_forcing
+    CHARACTER(LEN=256)                                    :: choice_insolation_forcing, filename_insolation
     REAL(dp)                                              :: time_to_read
-    CHARACTER(LEN=256)                                    :: filename_insolation
     LOGICAL                                               :: apply_forcing
+    !REAL(dp)                                              :: r  
+    !TYPE(type_model_region)                               :: grid_smooth      
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -778,30 +798,35 @@ MODULE ocean_matrix
       ! Read insolation field at the determined time
       CALL read_field_from_file_2D(TRIM(filename_insolation), 'Q_TOA', mesh, ins_current, time_to_read = time_to_read)
   
-      ! Compute w_ins
-      w_ins = (ins_current - ocean%matrix%Q_TOA_PI) / (ocean%matrix%Q_TOA_LGM - ocean%matrix%Q_TOA_PI)
-  
-      ! Handle division by zero 
+      ! Smooth insolation field
+      !r = 5000._dp
+      !CALL smooth_Gaussian_2D(mesh, ANT%grid_smooth, ins_current, r)
+
+      ! Compute w_ins for each mesh point
       DO vi = mesh%vi1, mesh%vi2
-        IF (ABS(ocean%matrix%Q_TOA_LGM(i) - ocean%matrix%Q_TOA_PI(i)) < 1e-5_dp) THEN
-          w_ins(i) = 0.0_dp
+        ! w_ins = (I_current - I_LGM) / (I_PI - I_LGM)
+        w_ins(vi) = (ins_current(vi) - ocean%matrix%Q_TOA_LGM(vi)) / (ocean%matrix%Q_TOA_PI(vi) - ocean%matrix%Q_TOA_LGM(vi))
+
+        ! Handle division by zero or very small denominators
+        IF (ABS(ocean%matrix%Q_TOA_PI(vi) - ocean%matrix%Q_TOA_LGM(vi)) < 1E-5_dp) THEN
+          w_ins(vi) = 0.0_dp
         END IF
       END DO
   
       ! Clamp weights between cutoff values if enabled
       IF (C%clamp_weights) THEN
         DO vi = mesh%vi1, mesh%vi2
-          w_ins(i) = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_ins(i)))
+          w_ins(vi) = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_ins(vi)))
         END DO
       END IF
   
-      print *, "Debug: interpolation weight calculated = ", w_ins(i)
+      !print *, "Interpolation weight calculated =", w_ins(vi)
 
       ! Apply interpolation using w_ins
       DO vi = mesh%vi1, mesh%vi2
         DO k = 1, C%nz_ocean
-          ocean%T(vi,k) = w_ins(i) * ocean%matrix%timeframe1%T(vi,k) + (1.0_dp - w_ins(i)) * ocean%matrix%timeframe0%T(vi,k)
-          ocean%S(vi,k) = w_ins(i) * ocean%matrix%timeframe1%S(vi,k) + (1.0_dp - w_ins(i)) * ocean%matrix%timeframe0%S(vi,k)
+          ocean%T(vi,k) = w_ins(vi) * ocean%matrix%timeframe0%T(vi,k) + (1.0_dp - w_ins(vi)) * ocean%matrix%timeframe1%T(vi,k)
+          ocean%S(vi,k) = w_ins(vi) * ocean%matrix%timeframe0%S(vi,k) + (1.0_dp - w_ins(vi)) * ocean%matrix%timeframe1%S(vi,k)
         END DO
       END DO
   
@@ -846,7 +871,7 @@ MODULE ocean_matrix
     wt0 = (ocean%matrix%t1 - time) / (ocean%matrix%t1 - ocean%matrix%t0)
     wt1 = 1.0_dp - wt0
 
-    print *, "Debug: interpolation weight calculated = ", wt0
+    print *, "Interpolation weight calculated =", wt1
 
     ! Apply linear interpolation
     DO vi = mesh%vi1, mesh%vi2
@@ -886,7 +911,7 @@ MODULE ocean_matrix
 
     ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
     CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)  ! Concentration during runtime
-    CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)             ! PI
+    CALL get_GHG_concentrations(0.0_dp, CO2_PI, CH4_PI, N2O_PI)             ! PI
     CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)        ! LGM
 
     ! Get config settings
@@ -930,7 +955,7 @@ MODULE ocean_matrix
         w_GHG = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_GHG))
     END IF
 
-    print *, "Debug: interpolation weight calculated = ", w_GHG
+    print *, "Interpolation weight calculated = ", w_GHG
 
     ! Apply interpolation using w_GHG
     DO vi = mesh%vi1, mesh%vi2
@@ -975,7 +1000,7 @@ MODULE ocean_matrix
 
     ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
     CALL get_GHG_concentrations(time, CO2_current, CH4_current, N2O_current)
-    CALL get_GHG_concentrations(100.0_dp, CO2_PI, CH4_PI, N2O_PI)
+    CALL get_GHG_concentrations(0.0_dp, CO2_PI, CH4_PI, N2O_PI)
     CALL get_GHG_concentrations(21000.0_dp, CO2_LGM, CH4_LGM, N2O_LGM)
 
     ! Get config settings
@@ -1238,6 +1263,7 @@ MODULE ocean_matrix
     idx_low = -1
     idx_high = -1
 
+    ! Edge cases
     IF (time <= age_data(1)) THEN
         ! Time is before the first data point
         idx_low = 1
@@ -1246,6 +1272,7 @@ MODULE ocean_matrix
         ! Time is after the last data point
         idx_low = num_points
         idx_high = num_points
+    ! Main data search
     ELSE
         ! Time is within the data range
         DO i = 1, num_points - 1
@@ -1431,9 +1458,9 @@ MODULE ocean_matrix
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_ocean_model_matrix'
     TYPE(type_ocean_matrix_interpolation)                 :: matrix
     INTEGER                                               :: i, j, vi, k
+    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2)                :: mask_ocean
     REAL(dp)                                              :: max_ocean_size, sigma
-    INTEGER, ALLOCATABLE                                  :: mask_ocean_T(:), mask_ocean_S(:)
-    LOGICAL, ALLOCATABLE                                  :: mask_icefree_ocean(:)
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: T_field, S_field
 
     ! Add routine to path
     CALL init_routine( routine_name) 
@@ -1461,46 +1488,56 @@ MODULE ocean_matrix
     END SELECT
 
     ! == Ocean Extrapolation after interpolation ==
-
     IF(C%enable_jourdain) THEN
 
-      ! Allocate local arrays for masks
-      ALLOCATE(mask_ocean_T(mesh%vi1:mesh%vi2), mask_ocean_S(mesh%vi1:mesh%vi2))
-      ALLOCATE(mask_icefree_ocean(mesh%vi1:mesh%vi2))
-
-      mask_ocean_T = 0
-      mask_ocean_S = 0
-      mask_icefree_ocean = .FALSE.
-
-      ! Determine ocean nodes and set masks
+      ! Initialize mask
+      mask_ocean = 0
+      
+      ! Set basic mask (2 = seed points, 1 = extrapolation points, 0 = ignore)
       DO vi = mesh%vi1, mesh%vi2
-        mask_icefree_ocean(i) = .TRUE.
-
-        IF (mask_icefree_ocean(i)) THEN
-          ! Assuming all nodes with ocean data are seeds (2)
-          mask_ocean_T(i) = 2
-          mask_ocean_S(i) = 2
-        ELSE
-          mask_ocean_T(i) = 0
-          mask_ocean_S(i) = 0
-        END IF
+          IF (ice%mask_icefree_ocean(vi)) THEN
+              mask_ocean(vi) = 2      ! Open ocean: use as seed
+          ELSEIF (ice%mask_floating_ice(vi)) THEN
+              mask_ocean(vi) = 1      ! Ice cavity: needs extrapolation
+          END IF
       END DO
-
-      ! Determine max scale for sigma
+      
+      ! Calculate extrapolation radius
       max_ocean_size = MINVAL(mesh%R)
       DO vi = mesh%vi1, mesh%vi2
-        IF (mask_icefree_ocean(i)) max_ocean_size = MAX(max_ocean_size, mesh%R(i))
+          IF (ice%mask_floating_ice(vi)) THEN
+              max_ocean_size = MAX(max_ocean_size, mesh%R(vi))
+          END IF
       END DO
       sigma = max_ocean_size / 3._dp
-
-      ! Extrapolate each vertical layer
+      
+      ! Print output
+      IF (par%master) THEN
+          WRITE(*,*) 'Ocean extrapolation runtime:'
+          WRITE(*,*) '  - Number of seed points:', COUNT(mask_ocean == 2)
+          WRITE(*,*) '  - Number of cavity points:', COUNT(mask_ocean == 1)
+          WRITE(*,*) '  - Sigma:', sigma
+      END IF
+      
+      ! Extrapolate each vertical layer independently
       DO k = 1, C%nz_ocean
-        CALL extrapolate_Gaussian(mesh, mask_ocean_T, ocean%T(:,j), sigma)
-        CALL extrapolate_Gaussian(mesh, mask_ocean_S, ocean%S(:,j), sigma)
+          ! Store current layer values
+          T_field = ocean%T(:,k)
+          S_field = ocean%S(:,k)
+          
+          ! Perform extrapolation
+          CALL extrapolate_Gaussian(mesh, mask_ocean, T_field, sigma)
+          CALL extrapolate_Gaussian(mesh, mask_ocean, S_field, sigma)
+          
+          ! Update only cavity points
+          DO vi = mesh%vi1, mesh%vi2
+              IF (mask_ocean(vi) == 1) THEN
+                  ocean%T(vi,k) = T_field(vi)
+                  ocean%S(vi,k) = S_field(vi)
+              END IF
+          END DO
       END DO
-
-      DEALLOCATE(mask_ocean_T, mask_ocean_S, mask_icefree_ocean)
-
+      
     END IF
 
     ! Finalise routine path
@@ -1524,11 +1561,11 @@ MODULE ocean_matrix
     INTEGER                                               :: i, j, vi, k
     REAL(dp)                                              :: time_to_read_ins_PI, time_to_read_ins_LGM, time_to_read_tas, time_to_read_sos
     TYPE(type_ocean_matrix_interpolation)                 :: matrix
+    INTEGER,  DIMENSION(mesh%vi1:mesh%vi2)                :: mask_ocean
     REAL(dp)                                              :: max_ocean_size, sigma
-    INTEGER, ALLOCATABLE                                  :: mask_ocean_T(:), mask_ocean_S(:)
-    LOGICAL, ALLOCATABLE                                  :: mask_icefree_ocean(:)
+    REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: T_field, S_field
     TYPE(type_ice_model)                                  :: ice
-    REAL(dp)                                              :: scale_snapshot_T, scale_snapshot_S
+    REAL(dp)                                              :: scale_snapshot_LGM_T, scale_snapshot_LGM_S, scale_snapshot_PI_T, scale_snapshot_PI_S
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -1553,19 +1590,7 @@ MODULE ocean_matrix
       ALLOCATE(ocean%matrix%timeframe1%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
       ocean%matrix%timeframe1%T = 0._dp
       ocean%matrix%timeframe1%S = 0._dp      
-    END IF
-    IF (.NOT. ALLOCATED(ocean%T) .AND. .NOT. ALLOCATED(ocean%S)) THEN ! Main oceanic variables
-      ALLOCATE(ocean%T( mesh%vi1:mesh%vi2, C%nz_ocean))                                                 
-      ALLOCATE(ocean%S( mesh%vi1:mesh%vi2, C%nz_ocean))
-      ocean%T = 0._dp
-      ocean%S = 0._dp      
-    END IF
-    IF (.NOT. ALLOCATED(ocean%T_draft) .AND. .NOT. ALLOCATED(ocean%T_freezing_point)) THEN ! Secondary oceanic variables
-      ALLOCATE( ocean%T_draft(          mesh%vi1:mesh%vi2))
-      ALLOCATE( ocean%T_freezing_point( mesh%vi1:mesh%vi2))
-      ocean%T_draft          = 0._dp
-      ocean%T_freezing_point = 0._dp     
-    END IF
+    END IF    
 
     ! Safety check allocation
     IF (.NOT. ALLOCATED(ocean%matrix%timeframe0%T) .OR. .NOT. ALLOCATED(ocean%matrix%timeframe0%S)) THEN
@@ -1582,8 +1607,10 @@ MODULE ocean_matrix
     filename_sos         = TRIM(C%filename_sos)                 ! Anomaly field S
 
     ! Set up scaling option
-    scale_snapshot_T = C%scale_snapshot_T
-    scale_snapshot_S = C%scale_snapshot_S
+    scale_snapshot_LGM_T = C%scale_snapshot_LGM_T
+    scale_snapshot_LGM_S = C%scale_snapshot_LGM_S
+    scale_snapshot_PI_T = C%scale_snapshot_PI_T
+    scale_snapshot_PI_S = C%scale_snapshot_PI_S
 
     ! Read the ocean snapshots
     CALL read_field_from_file_3D_ocean(filename1, 't_an', mesh, ocean%matrix%timeframe0%T) ! Ocean T PI
@@ -1635,16 +1662,16 @@ MODULE ocean_matrix
     ! Prescribe initial ocean state (start from PI snapshot)
     DO vi = mesh%vi1, mesh%vi2
       DO k = 1, C%nz_ocean
-        ocean%T(vi,k) = ocean%matrix%timeframe0%T(vi,k)
-        ocean%S(vi,k) = ocean%matrix%timeframe0%S(vi,k)
+        ocean%T(vi,k) = MAX(-3.0_dp, ocean%matrix%timeframe0%T(vi,k) + scale_snapshot_PI_T)
+        ocean%S(vi,k) = ocean%matrix%timeframe0%S(vi,k) + scale_snapshot_PI_S
       END DO
     END DO
 
     ! Options to scale snapshot LGM
     DO vi = mesh%vi1, mesh%vi2
       DO k = 1, C%nz_ocean
-        ocean%matrix%timeframe1%T(vi,k) = ocean%matrix%timeframe1%T(vi,k) + scale_snapshot_T
-        ocean%matrix%timeframe1%S(vi,k) = ocean%matrix%timeframe1%S(vi,k) + scale_snapshot_S
+        ocean%matrix%timeframe1%T(vi,k) = MAX(-3.0_dp, ocean%matrix%timeframe1%T(vi,k) + scale_snapshot_LGM_T)
+        ocean%matrix%timeframe1%S(vi,k) = ocean%matrix%timeframe1%S(vi,k) + scale_snapshot_LGM_S
       END DO
     END DO
 
@@ -1663,58 +1690,6 @@ MODULE ocean_matrix
       WRITE(*, *) 'Snapshot difference:'
       WRITE(*, *) 'Max T difference:', MAXVAL(ABS(ocean%matrix%timeframe0%T - ocean%matrix%timeframe1%T))
       WRITE(*, *) 'Max S difference:', MAXVAL(ABS(ocean%matrix%timeframe0%S - ocean%matrix%timeframe1%S))
-    END IF
-
-    ! == Ocean extrapolation setup ==
-
-    ! Initializing mask arrays
-    IF(C%enable_jourdain) THEN
-
-      ALLOCATE(mask_ocean_T(mesh%vi1:mesh%vi2), mask_ocean_S(mesh%vi1:mesh%vi2))
-      ALLOCATE(mask_icefree_ocean(mesh%vi1:mesh%vi2))
-
-      mask_ocean_T = 0
-      mask_ocean_S = 0
-      mask_icefree_ocean = .FALSE.
-
-      ! Determine which nodes are ocean and set mask arrays
-      ! For now, assume all nodes are ocean:
-      DO vi = mesh%vi1, mesh%vi2
-        mask_icefree_ocean(i) = .TRUE.
-        IF (mask_icefree_ocean(i)) THEN
-          ! All nodes have snapshot data - treat as seed (2)
-          mask_ocean_T(i) = 2
-          mask_ocean_S(i) = 2
-        ELSE
-          mask_ocean_T(i) = 0
-          mask_ocean_S(i) = 0
-        END IF
-      END DO
-
-      ! Determine sigma
-      max_ocean_size = MINVAL(mesh%R)
-      DO vi = mesh%vi1, mesh%vi2
-        IF (mask_icefree_ocean(i)) max_ocean_size = MAX(max_ocean_size, mesh%R(i))
-      END DO
-      sigma = max_ocean_size / 3._dp
-
-      ! Extrapolate each vertical layer for both PI and LGM snapshots
-      DO k = 1, C%nz_ocean
-        CALL extrapolate_Gaussian(mesh, mask_ocean_T, ocean%matrix%timeframe0%T(:,k), sigma)
-        CALL extrapolate_Gaussian(mesh, mask_ocean_S, ocean%matrix%timeframe0%S(:,k), sigma)
-        CALL extrapolate_Gaussian(mesh, mask_ocean_T, ocean%matrix%timeframe1%T(:,k), sigma)
-        CALL extrapolate_Gaussian(mesh, mask_ocean_S, ocean%matrix%timeframe1%S(:,k), sigma)
-      END DO
-
-      ! Update initial ocean state again (now smoothed)
-      DO vi = mesh%vi1, mesh%vi2
-        DO k = 1, C%nz_ocean
-          ocean%T(vi,k) = ocean%matrix%timeframe0%T(vi,k)
-          ocean%S(vi,k) = ocean%matrix%timeframe0%S(vi,k)
-        END DO
-      END DO
-
-      DEALLOCATE(mask_ocean_T, mask_ocean_S, mask_icefree_ocean)
     END IF
 
     ! Finalise routine path
