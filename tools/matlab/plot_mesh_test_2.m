@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_linear_time_higher_resolution_enable_jourdain_2000_test_implicit\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_linear_time_do_BMB_inversion_config_FALSE_enable_jourdain_2000_test_implicit\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
