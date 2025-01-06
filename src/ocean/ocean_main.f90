@@ -23,6 +23,7 @@ MODULE ocean_main
                                                                      add_field_mesh_dp_3D_ocean, add_depth_dimension_to_file, write_time_to_file, write_to_field_multopt_mesh_dp_3D_ocean
   USE netcdf_input                                           , ONLY: read_field_from_file_3D_ocean
   USE netcdf_debug                                           , ONLY: save_variable_as_netcdf_dp_2D, save_variable_as_netcdf_dp_1D
+  USE grid_types                                             , ONLY: type_grid
 
   IMPLICIT NONE
 
@@ -31,7 +32,7 @@ CONTAINS
 ! ===== Main routines =====
 ! =========================
 
-  SUBROUTINE run_ocean_model( mesh, ice, ocean, region_name, time)
+  SUBROUTINE run_ocean_model( mesh, ice, ocean, region_name, time, grid_smooth)
     ! Calculate the ocean
 
     IMPLICIT NONE
@@ -42,6 +43,7 @@ CONTAINS
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
     REAL(dp),                               INTENT(IN)    :: time
+    TYPE(type_grid),                        INTENT(IN)    :: grid_smooth
 
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_ocean_model'
@@ -94,7 +96,7 @@ CONTAINS
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL run_ocean_model_realistic( mesh, ice, ocean)
     ELSEIF (choice_ocean_model == 'matrix') THEN
-      CALL run_ocean_model_matrix( mesh, ice, ocean, time, region_name)
+      CALL run_ocean_model_matrix( mesh, ice, ocean, time, region_name, grid_smooth)
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF

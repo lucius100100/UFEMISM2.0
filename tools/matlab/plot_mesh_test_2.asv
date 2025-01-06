@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_insolation+GHG_radiative_21000\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_insolation+GHG_21000\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -81,27 +81,6 @@ if numel(x_final) > 2
     plot(ax, x_final(K_final), y_final(K_final), 'r-', 'LineWidth', 1, 'DisplayName', 'LGM');
 end
 
-%add heightlines
-%(x, y, z) from mesh, create grid, interpolate
-x = mesh.V(:,1);
-y = mesh.V(:,2);
-z = Hi_diff(:);
-
-numPts = 400; 
-xq = linspace(mesh.xmin, mesh.xmax, numPts);
-yq = linspace(mesh.ymin, mesh.ymax, numPts);
-[Xq, Yq] = meshgrid(xq, yq);
-
-%interpolate
-Zq = griddata(x, y, z, Xq, Yq, 'linear');
-
-%contour levels
-numContours = 20;
-levels = linspace(min(z), max(z), numContours);
-
-%plot contours
-[C,h] = contour(ax, Xq, Yq, Zq, levels, 'k', 'HandleVisibility','off');
-
 %legend
 legend(ax, 'show', 'Location', 'best', 'FontSize', 16);
 
@@ -133,13 +112,13 @@ end
 hold(axMask1,'off');
 
 %mask counts table below initial mask subplot
-%uitable('Parent', figMask, ...
-        %'Data', [mask_values; counts_initial]', ...
-        %'ColumnName', {'Mask Value', 'Count'}, ...
-        %'RowName', arrayfun(@mask_label, mask_values, 'UniformOutput', false), ...
-        %'Units', 'normalized', ...
-        %'Position', [margin, margin, subplotWidth, tableHeight], ...
-        %'FontSize', 12);
+uitable('Parent', figMask, ...
+        'Data', [mask_values; counts_initial]', ...
+        'ColumnName', {'Mask Value', 'Count'}, ...
+        'RowName', arrayfun(@mask_label, mask_values, 'UniformOutput', false), ...
+        'Units', 'normalized', ...
+        'Position', [margin, margin, subplotWidth, tableHeight], ...
+        'FontSize', 12);
 
 %subplot final mask
 axMask2 = axes('Position',[2*margin + subplotWidth, 1 - subplotHeight - margin - tableHeight, subplotWidth, subplotHeight]);
@@ -155,28 +134,12 @@ end
 hold(axMask2,'off');
 
 %mask counts table below final mask subplot
-%uitable('Parent', figMask, ...
-        %'Data', [mask_values; counts_final]', ...
-        %'ColumnName', {'Mask Value', 'Count'}, ...
-        %'RowName', arrayfun(@mask_label, mask_values, 'UniformOutput', false), ...
-        %'Units', 'normalized', ...
-        %'Position', [2*margin + subplotWidth, margin, subplotWidth, tableHeight], ...
-        %'FontSize', 12);
-
-% --- Mask counts table ---
-figMaskTables = figure('Position',[200,200,800,400],'Color','w');
-
-combinedData = [mask_values', counts_initial', counts_final'];
-columnNames = {'Mask Value', 'Initial Count', 'Final Count'};
-rowNames = arrayfun(@mask_label, mask_values, 'UniformOutput', false);
-
-%combined uitable
-uitable('Parent', figMaskTables, ...
-        'Data', combinedData, ...
-        'ColumnName', columnNames, ...
-        'RowName', rowNames, ...
+uitable('Parent', figMask, ...
+        'Data', [mask_values; counts_final]', ...
+        'ColumnName', {'Mask Value', 'Count'}, ...
+        'RowName', arrayfun(@mask_label, mask_values, 'UniformOutput', false), ...
         'Units', 'normalized', ...
-        'Position', [0.1, 0.1, 0.8, 0.8], ...
+        'Position', [2*margin + subplotWidth, margin, subplotWidth, tableHeight], ...
         'FontSize', 12);
 
 %function to map mask values to labels
@@ -207,7 +170,7 @@ function label = mask_label(value)
     end
 end
 
-%function to mimic 'plot_mesh_data_a',
+%function to mimic 'plot_mesh_data_a' on a given axis,
 %with color scale suitable for mask values
 function plot_submesh_data_mask(axHandle, mesh, dataVals)
     %"plot_mesh_data_a" patch logic for mask values
@@ -241,29 +204,62 @@ function plot_submesh_data(axHandle, mesh, dataVals, addColorbar)
         addColorbar = true; 
     end
 
-    patch('Parent', axHandle,...
-          'Vertices', mesh.V(1:mesh.nV,:),...
-          'Faces',    mesh.Tri(1:mesh.nTri,:),...
-          'FaceColor','interp',...
-          'FaceVertexCData', dataVals,...
-          'EdgeColor','none',...
-          'HandleVisibility','off');
+    % Plot the ice thickness difference using patch
+    p = patch('Parent', axHandle,...
+              'Vertices', mesh.V(1:mesh.nV,:),...
+              'Faces',    mesh.Tri(1:mesh.nTri,:),...
+              'FaceColor','interp',...
+              'FaceVertexCData', dataVals,...
+              'EdgeColor','none',...
+              'HandleVisibility','off');
 
-    %axis limits
- axis(axHandle, [mesh.xmin mesh.xmax mesh.ymin mesh.ymax]);
+    % Set axis limits based on mesh boundaries
+    axis(axHandle, [mesh.xmin mesh.xmax mesh.ymin mesh.ymax]);
     set(axHandle, 'XTick', [], 'YTick', [], 'FontSize', 14);
 
-    %color scaling
+    % Set color scaling based on data values
     caxis(axHandle, [min(dataVals(:)), max(dataVals(:))]);
 
-    %add colorbar
+    % Add colorbar if requested
     if addColorbar
         cb = colorbar(axHandle, 'Location', 'eastoutside');
         set(cb, 'FontSize', 14);
-        ylabel(cb, 'Ice thickness difference', 'FontSize', 14);
+        ylabel(cb, 'Ice Thickness Difference', 'FontSize', 14); % Label for colorbar
     end
 
+    % Maintain equal aspect ratio
     daspect(axHandle, [1 1 1]);
 
-    
-end 
+    % Hold the current plot to overlay contours
+    hold(axHandle, 'on');
+
+    % Define grid resolution for interpolation
+    gridSize = 500; % Adjust based on performance and desired resolution
+
+    % Create a regular grid over the mesh domain
+    x_lin = linspace(mesh.xmin, mesh.xmax, gridSize);
+    y_lin = linspace(mesh.ymin, mesh.ymax, gridSize);
+    [X_grid, Y_grid] = meshgrid(x_lin, y_lin);
+
+    % Interpolate the unstructured data onto the regular grid
+    data_grid = griddata(mesh.V(:,1), mesh.V(:,2), dataVals, X_grid, Y_grid, 'natural');
+
+    % Handle NaN values resulting from interpolation by setting them to the minimum data value
+    data_grid(isnan(data_grid)) = min(dataVals(:));
+
+    % Define the number of contour levels or specify exact levels
+    numContours = 20; % Number of equally spaced contour levels
+    % Alternatively, specify exact contour levels based on your data range:
+    % contourLevels = [0:100:1000]; % Example levels
+    % [C, ~] = contour(axHandle, X_grid, Y_grid, data_grid, contourLevels, 'LineColor', 'k', 'LineWidth', 0.5);
+    [C, ~] = contour(axHandle, X_grid, Y_grid, data_grid, numContours, 'LineColor', 'k', 'LineWidth', 0.5);
+
+    % Optionally, add labels to contour lines
+    clabel(C, 'FontSize', 8, 'Color', 'k');
+
+    % Release the hold on the current plot
+    hold(axHandle, 'off');
+
+    % Add title (optional, can be managed in the main script)
+    % title(axHandle, 'Ice Thickness Difference between LGM and PI', 'FontSize', 22);
+end

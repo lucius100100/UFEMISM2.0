@@ -233,7 +233,7 @@ CONTAINS
 
       CASE ('prescribed')
         ! Sea-level prescribed from external record file
-        CALL crash('Sea level initialisation: prescribed method not implement yet!')
+        !CALL crash('Sea level initialisation: prescribed method not implement yet!')
         ! ice%SL = forcing%sealevel_obs
 
       CASE ('eustatic')
