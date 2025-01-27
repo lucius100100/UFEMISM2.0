@@ -1,0 +1,40 @@
+clc;
+clear all;
+close all;
+
+%define filename
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_realistic_climate\main_output_ANT_00001.nc";
+
+%read mesh from file
+mesh = read_mesh_from_file(filename);
+
+%read time (time)
+time = ncread(filename, 'time');
+ti = length(time);
+
+%plot mesh
+%plot_mesh(mesh);
+
+%plot ocean temperature difference
+depth_level = 1;
+T_ocean_t1 = ncread(filename, 'T_ocean', [1, depth_level, 1], [Inf, 1, 1]);
+T_ocean_t2 = ncread(filename, 'T_ocean', [1, depth_level, ti], [Inf, 1, 1]);
+T_diff = T_ocean_t2 - T_ocean_t1;
+H = plot_mesh_data(mesh, T_diff);
+
+%colorbar and title
+set(H.Ax, 'CLim');
+colormap(H.Ax, 'jet'); 
+title(H.Ax, ['Ocean temperature difference (depth=' num2str(depth_level) ')']);
+ylabel(H.Cbar, 'Temperature diff (^\circC)');
+
+%plot ocean salinity difference
+depth_level = 1;
+S_ocean_t1 = ncread(filename, 'S_ocean', [1, depth_level, 1], [Inf, 1, 1]);
+S_ocean_t2 = ncread(filename, 'S_ocean', [1, depth_level, ti], [Inf, 1, 1]);
+S_diff = S_ocean_t2 - S_ocean_t1;
+H = plot_mesh_data(mesh, S_diff);
+
+%title
+title(H.Ax, ['Ocean salinity difference (depth=' num2str(depth_level) ')']);
+ylabel(colorbar(H.Ax), 'Salinity diff (psu)');

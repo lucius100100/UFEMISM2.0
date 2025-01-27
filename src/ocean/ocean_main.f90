@@ -430,8 +430,7 @@ CONTAINS
     ELSEIF (choice_ocean_model == 'realistic') THEN
       CALL crash('Remapping after mesh update not implemented yet for realistic ocean')
     ELSEIF (choice_ocean_model == 'matrix') THEN
-      CALL crash('Remapping after mesh update not implemented yet for matrix ocean')
-      ! FIX
+      ! Not needed since we interpolate between two oceanic snapshots
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF

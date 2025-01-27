@@ -63,8 +63,8 @@ MODULE ocean_model_types
     TYPE(type_ocean_matrix_interpolation)   :: matrix
 
     ! Extrapolation masks
-    LOGICAL,  DIMENSION(:    ), ALLOCATABLE :: mask_ocean_T
-    LOGICAL,  DIMENSION(:    ), ALLOCATABLE :: mask_ocean_S
+    LOGICAL,  DIMENSION(:,:  ), ALLOCATABLE :: mask_ocean_T
+    LOGICAL,  DIMENSION(:,:  ), ALLOCATABLE :: mask_ocean_S
 
   END TYPE type_ocean_model
 

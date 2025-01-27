@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_insolation+GHG_radiative_21000\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_realistic_ocean_WOA_realistic_climate\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -11,33 +11,6 @@ mesh = read_mesh_from_file(filename);
 %read time (time)
 time = ncread(filename, 'time');
 ti   = length(time);
-
-%ice thickness (time, vi)
-Hi_initial = ncread(filename, 'Hi', [1, 1], [Inf, 1]);
-Hi_final   = ncread(filename, 'Hi', [1, ti], [Inf, 1]);
-Hi_diff    = Hi_final - Hi_initial;
-
-%depth level
-depth_level = 1;
-
-%read ocean temperature at depth_level for initial and final time steps
-T_ocean_t1 = ncread(filename, 'T_ocean', [1, depth_level, 1], [Inf, 1, 1]); 
-T_ocean_t2 = ncread(filename, 'T_ocean', [1, depth_level, ti], [Inf, 1, 1]); 
-
-%temperature difference
-T_diff = T_ocean_t2 - T_ocean_t1;
-
-% Mask values:
-% icefree_land                        = 1
-% icefree_ocean                       = 2
-% grounded_ice                        = 3
-% floating_ice                        = 4
-% groundingline_gr                    = 5
-% groundingline_fl                    = 6
-% calvingfront_gr                     = 7
-% calvingfront_fl                     = 8
-% margin                              = 9
-% coastline                           = 10
 
 %read masks (time, vi)
 mask_initial = ncread(filename, 'mask', [1, 1], [Inf, 1]);
@@ -52,62 +25,18 @@ mask_values = 1:10;
 counts_initial = arrayfun(@(x) sum(mask_initial == x), mask_values);
 counts_final   = arrayfun(@(x) sum(mask_final   == x), mask_values);
 
-% --- Ice thickness ---
-
-%ice thickness difference, overlain with initial and final margins
-f = figure('Position',[100,100,1400,900],'Color','w');
-ax = axes('Parent',f);
-hold(ax, 'on');
-
-%plot ice thickness difference as background
-plot_submesh_data(ax, mesh, Hi_diff, true);
-title(ax, 'Ice thickness difference between LGM and PI', 'FontSize', 22);
-
-%plot_submesh_data(ax, mesh, T_diff);
-
-%overlay initial margin (black)
+%compute boundary for initial and final mask
 x_init = mesh.V(mask_initial_ice, 1);
 y_init = mesh.V(mask_initial_ice, 2);
 if numel(x_init) > 2
     K_init = boundary(x_init, y_init, 1);
-    plot(ax, x_init(K_init), y_init(K_init), 'k-', 'LineWidth', 1, 'DisplayName', 'PI');
 end
 
-%overlay final margin (red)
 x_final = mesh.V(mask_final_ice, 1);
 y_final = mesh.V(mask_final_ice, 2);
 if numel(x_final) > 2
     K_final = boundary(x_final, y_final, 1);
-    plot(ax, x_final(K_final), y_final(K_final), 'r-', 'LineWidth', 1, 'DisplayName', 'LGM');
 end
-
-%add heightlines
-%(x, y, z) from mesh, create grid, interpolate
-x = mesh.V(:,1);
-y = mesh.V(:,2);
-z = Hi_diff(:);
-
-numPts = 400; 
-xq = linspace(mesh.xmin, mesh.xmax, numPts);
-yq = linspace(mesh.ymin, mesh.ymax, numPts);
-[Xq, Yq] = meshgrid(xq, yq);
-
-%interpolate
-Zq = griddata(x, y, z, Xq, Yq, 'linear');
-
-%contour levels
-numContours = 20;
-levels = linspace(min(z), max(z), numContours);
-
-%plot contours
-[C,h] = contour(ax, Xq, Yq, Zq, levels, 'k', 'HandleVisibility','off');
-
-%legend
-legend(ax, 'show', 'Location', 'best', 'FontSize', 16);
-
-%grid on, hold off
-grid(ax, 'on');
-hold(ax, 'off');
 
 % --- Masks ---
 
@@ -132,15 +61,6 @@ if numel(x_init) > 2
 end
 hold(axMask1,'off');
 
-%mask counts table below initial mask subplot
-%uitable('Parent', figMask, ...
-        %'Data', [mask_values; counts_initial]', ...
-        %'ColumnName', {'Mask Value', 'Count'}, ...
-        %'RowName', arrayfun(@mask_label, mask_values, 'UniformOutput', false), ...
-        %'Units', 'normalized', ...
-        %'Position', [margin, margin, subplotWidth, tableHeight], ...
-        %'FontSize', 12);
-
 %subplot final mask
 axMask2 = axes('Position',[2*margin + subplotWidth, 1 - subplotHeight - margin - tableHeight, subplotWidth, subplotHeight]);
 plot_submesh_data_mask(axMask2, mesh, double(mask_final));
@@ -153,15 +73,6 @@ if numel(x_final) > 2
    plot(axMask2, x_final(K_final), y_final(K_final), 'k-', 'LineWidth', 1);
 end
 hold(axMask2,'off');
-
-%mask counts table below final mask subplot
-%uitable('Parent', figMask, ...
-        %'Data', [mask_values; counts_final]', ...
-        %'ColumnName', {'Mask Value', 'Count'}, ...
-        %'RowName', arrayfun(@mask_label, mask_values, 'UniformOutput', false), ...
-        %'Units', 'normalized', ...
-        %'Position', [2*margin + subplotWidth, margin, subplotWidth, tableHeight], ...
-        %'FontSize', 12);
 
 % --- Mask counts table ---
 figMaskTables = figure('Position',[200,200,800,400],'Color','w');
@@ -207,8 +118,7 @@ function label = mask_label(value)
     end
 end
 
-%function to mimic 'plot_mesh_data_a',
-%with color scale suitable for mask values
+%function to mimic 'plot_mesh_data_a' with color scale
 function plot_submesh_data_mask(axHandle, mesh, dataVals)
     %"plot_mesh_data_a" patch logic for mask values
     patch('Parent', axHandle,...
@@ -233,37 +143,4 @@ function plot_submesh_data_mask(axHandle, mesh, dataVals)
     %colorbar ticks 1-10 with labels
     cb.Ticks = 1:10;
     cb.TickLabels = arrayfun(@mask_label, 1:10, 'UniformOutput', false);
-end 
-
-%function to plot ice thickness difference or similar data
-function plot_submesh_data(axHandle, mesh, dataVals, addColorbar)
-    if nargin < 4
-        addColorbar = true; 
-    end
-
-    patch('Parent', axHandle,...
-          'Vertices', mesh.V(1:mesh.nV,:),...
-          'Faces',    mesh.Tri(1:mesh.nTri,:),...
-          'FaceColor','interp',...
-          'FaceVertexCData', dataVals,...
-          'EdgeColor','none',...
-          'HandleVisibility','off');
-
-    %axis limits
- axis(axHandle, [mesh.xmin mesh.xmax mesh.ymin mesh.ymax]);
-    set(axHandle, 'XTick', [], 'YTick', [], 'FontSize', 14);
-
-    %color scaling
-    caxis(axHandle, [min(dataVals(:)), max(dataVals(:))]);
-
-    %add colorbar
-    if addColorbar
-        cb = colorbar(axHandle, 'Location', 'eastoutside');
-        set(cb, 'FontSize', 14);
-        ylabel(cb, 'Ice thickness difference', 'FontSize', 14);
-    end
-
-    daspect(axHandle, [1 1 1]);
-
-    
 end 

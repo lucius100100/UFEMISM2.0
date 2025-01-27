@@ -114,6 +114,8 @@ CONTAINS
     ! Add routine to path
     CALL init_routine( routine_name)
 
+    C%choice_ocean_isomip_scenario = 'COLD'
+
     ! Define scenario-dependent parameters
     SELECT CASE (C%choice_ocean_isomip_scenario)
       CASE DEFAULT

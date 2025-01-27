@@ -15,6 +15,7 @@ MODULE climate_main
   USE climate_model_types                                    , ONLY: type_climate_model
   USE climate_idealised                                      , ONLY: initialise_climate_model_idealised, run_climate_model_idealised
   USE climate_realistic                                      , ONLY: initialise_climate_model_realistic, run_climate_model_realistic
+  USE climate_matrix                                         , ONLY: initialise_climate_model_matrix, run_climate_model_matrix
   USE reallocate_mod                                         , ONLY: reallocate_bounds
   USE netcdf_basic                                           , ONLY: create_new_netcdf_file_for_writing, close_netcdf_file, open_existing_netcdf_file_for_writing
   USE netcdf_output                                          , ONLY: generate_filename_XXXXXdotnc, setup_mesh_in_netcdf_file, add_time_dimension_to_file, &
@@ -89,6 +90,8 @@ CONTAINS
       CALL run_climate_model_idealised( mesh, ice, climate, time)
     ELSEIF (choice_climate_model == 'realistic') THEN
       CALL run_climate_model_realistic( mesh, ice, climate, time)
+    ELSEIF (choice_climate_model == 'matrix') THEN
+      CALL run_climate_model_matrix( mesh, ice, climate, time, region_name)
     ELSE
       CALL crash('unknown choice_climate_model "' // TRIM( choice_climate_model) // '"')
     END IF
@@ -147,6 +150,9 @@ CONTAINS
       CALL initialise_climate_model_idealised( mesh, climate)
     ELSEIF (choice_climate_model == 'realistic') THEN
       CALL initialise_climate_model_realistic( mesh, climate, region_name)
+    ELSEIF (choice_climate_model == 'matrix') THEN
+      CALL initialise_climate_model_matrix( mesh, climate, region_name)
+    
     ELSE
       CALL crash('unknown choice_climate_model "' // TRIM( choice_climate_model) // '"')
     END IF
@@ -194,6 +200,8 @@ CONTAINS
       ! No need to do anything
     ELSEIF (choice_climate_model == 'realistic') THEN
       CALL write_to_restart_file_climate_model_region( mesh, climate, region_name, time)
+    ELSEIF (choice_climate_model == 'matrix') THEN
+      !CALL write_to_restart_file_climate_model_region( mesh, climate, region_name, time)
     ELSE
       CALL crash('unknown choice_climate_model "' // TRIM( choice_climate_model) // '"')
     END IF
@@ -286,6 +294,8 @@ CONTAINS
       ! No need to do anything
     ELSEIF (choice_climate_model == 'realistic') THEN
       CALL create_restart_file_climate_model_region( mesh, climate, region_name)
+    ELSEIF (choice_climate_model == 'matrix') THEN
+      !CALL create_restart_file_climate_model_region( mesh, climate, region_name)  
     ELSE
       CALL crash('unknown choice_climate_model "' // TRIM( choice_climate_model) // '"')
     END IF
@@ -397,6 +407,8 @@ CONTAINS
       ! No need to remap anything here
     ELSEIF (choice_climate_model == 'realistic') THEN
       CALL initialise_climate_model_realistic( mesh_new, climate, region_name)
+    ELSEIF (choice_climate_model == 'matrix') THEN
+      !CALL initialise_climate_model_realistic( mesh_new, climate, region_name)
     ELSE
       CALL crash('unknown choice_climate_model "' // TRIM( choice_climate_model) // '"')
     END IF

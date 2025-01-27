@@ -1,0 +1,326 @@
+clc;
+clear all;
+close all;
+
+%filename
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_realistic_ocean_PMIP4_realistic_climate\main_output_ANT_00001.nc";
+
+%read mesh from file
+mesh = read_mesh_from_file(filename);
+
+%read time (time)
+time = ncread(filename, 'time');
+ti   = length(time);
+
+%ice thickness (time, vi)
+Hi_initial = ncread(filename, 'Hi', [1, 1], [Inf, 1]);
+Hi_final   = ncread(filename, 'Hi', [1, ti], [Inf, 1]);
+Hi_diff    = Hi_final - Hi_initial;
+
+%depth level
+depth_level = 1;
+
+%read ocean temperature at depth_level for initial and final time steps
+T_ocean_t1 = ncread(filename, 'T_ocean', [1, depth_level, 1], [Inf, 1, 1]); 
+T_ocean_t2 = ncread(filename, 'T_ocean', [1, depth_level, ti], [Inf, 1, 1]); 
+
+%temperature difference
+T_diff = T_ocean_t2 - T_ocean_t1;
+
+%mask values:
+% icefree_land                        = 1
+% icefree_ocean                       = 2
+% grounded_ice                        = 3
+% floating_ice                        = 4
+% groundingline_gr                    = 5
+% groundingline_fl                    = 6
+% calvingfront_gr                     = 7
+% calvingfront_fl                     = 8
+% margin                              = 9
+% coastline                           = 10
+
+%read masks (time, vi)
+mask_initial = ncread(filename, 'mask', [1, 1], [Inf, 1]);
+mask_final   = ncread(filename, 'mask', [1, ti], [Inf, 1]);
+
+%mask values 3 to 10 represent ice-covered regions
+mask_initial_ice = (mask_initial >= 3) & (mask_initial <= 10);
+mask_final_ice   = (mask_final   >= 3) & (mask_final   <= 10);
+
+%mask value counts
+mask_values = 1:10;
+counts_initial = arrayfun(@(x) sum(mask_initial == x), mask_values);
+counts_final   = arrayfun(@(x) sum(mask_final   == x), mask_values);
+
+%---ice thickness---
+
+%ice thickness difference, overlain with initial and final margins
+f = figure('Position',[100,100,1400,900],'Color','w');
+ax = axes('Parent',f);
+hold(ax, 'on');
+
+%plot ice thickness difference as background
+plot_submesh_data(ax, mesh, Hi_diff, true);
+title(ax, 'Ice thickness difference between LGM and PI', 'FontSize', 22);
+
+%---ISMIP6 overlay---
+%shapefile basin
+basin = shaperead("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\Basins_Antarctica_v02.shp");
+
+%basin info
+%disp('Shapefile Fields:');
+%disp(fieldnames(basin));
+
+%basinTable = struct2table(basin);
+%disp('Basin Table Preview:');
+%disp(head(basinTable));
+
+%extract field info
+basinName = {basin.NAME};
+basinRegions = {basin.Regions};
+basinSubregions = {basin.Subregions};
+basinType = {basin.TYPE};
+basinAsso_shelf = {basin.Asso_Shelf};
+
+uniqueNames = unique(basinName);
+uniqueRegions = unique(basinRegions);
+uniqueSubregions = unique(basinSubregions);
+uniqueTypes = unique(basinType);
+uniqueAsso_shelf = unique(basinAsso_shelf);
+
+%print shapefile info
+%disp('Name:');
+%disp(uniqueNames);
+%disp('Unique Regions:');
+%disp(uniqueRegions);
+%disp('Unique Subregions:');
+%disp(uniqueSubregions);
+%disp('Unique Types:');
+%disp(uniqueTypes);
+%disp('Unique Asso_shelf:');
+%disp(uniqueAsso_shelf);
+
+%count of antarctic sectors (subregions)
+%uniqueSubregions = uniqueSubregions(~cellfun(@isempty, uniqueSubregions));
+%disp(['Number of unique subregions (excluding empty): ', num2str(length(uniqueSubregions))]);
+
+%---basins and islands---
+
+%initialize array
+subregionPolygons = cell(length(uniqueSubregions), 1);
+subregionCentroids = zeros(length(uniqueSubregions), 2); 
+
+plottedIslands = false;
+plottedGrounded = false;
+plottedShelves = false;
+
+%loop through subregions
+for s = 1:length(uniqueSubregions)
+    currentSubregion = uniqueSubregions{s};
+    
+    %indices
+    basinIndices = find(strcmp(basinSubregions, currentSubregion));
+    
+    %empty polyshape
+    unionShape = polyshape();
+    
+    %all basins in current subregion
+    for b = basinIndices
+        x = basin(b).X;
+        y = basin(b).Y;
+
+        try
+            basinShape = polyshape(x, y);
+            unionShape = union(unionShape, basinShape);
+        catch ME
+            warning(['Error processing basin ', basin(b).NAME, ': ', ME.message]);
+        end
+    end
+    
+    %store union shape
+    subregionPolygons{s} = unionShape;
+    
+    %controid
+    [cx, cy] = centroid(unionShape);
+    subregionCentroids(s, :) = [cx, cy];
+    
+    %current type and region
+    currentType = basinType{basinIndices(1)};
+    currentRegion = basinRegions{basinIndices(1)};
+    
+    %linestyle and edgecolor
+    if strcmp(currentRegion, 'Islands')
+        %islands
+        plotColor = [0.7, 0.7, 0.7];  
+        lineStyle = '-';             
+        if ~plottedIslands
+            handleVis    = 'on';
+            displayName  = 'Islands';
+            plottedIslands = true;
+        else
+            handleVis    = 'off';
+            displayName  = '';
+        end
+    
+    elseif strcmp(currentType, 'GR')
+        %grounded ice (GI)
+        plotColor = 'k'; 
+        lineStyle = '-';
+        if ~plottedGrounded
+            handleVis    = 'on';
+            displayName  = 'Drainage basins';
+            plottedGrounded = true;
+        else
+            handleVis    = 'off';
+            displayName  = '';
+        end
+    
+    elseif strcmp(currentType, 'IS')
+        %ice shelves (IS)
+        plotColor = 'k'; 
+        lineStyle = '--';
+        if ~plottedShelves
+            handleVis    = 'on';
+            displayName  = 'Ice shelves';
+            plottedShelves = true;
+        else
+            handleVis    = 'off';
+            displayName  = '';
+        end
+    
+    else
+        %rest
+        plotColor    = 'k';
+        lineStyle    = '-';
+        handleVis    = 'off';
+        displayName  = '';
+    end
+    
+    %subregions boundaries
+    plot(ax, unionShape, ...
+        'FaceColor','none', ...
+        'EdgeColor', plotColor, ...
+        'LineWidth', 1, ...
+        'LineStyle', lineStyle, ...
+        'HandleVisibility', handleVis, ...
+        'DisplayName', displayName);
+end
+
+%plot individual basins
+for i = 1:length(basin)
+    x = basin(i).X;
+    y = basin(i).Y;
+    
+    %plotting
+    plot(ax, x, y, 'Color', [0.3, 0.3, 0.3], 'LineWidth', 0.5, 'HandleVisibility', 'off');
+end
+
+%text labels
+for s = 1:length(uniqueSubregions)
+    cx = subregionCentroids(s, 1);
+    cy = subregionCentroids(s, 2);
+    label = uniqueSubregions{s};
+    
+    %text properties
+    text(ax, cx, cy, label, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+        'FontSize', 8, 'FontWeight', 'bold', 'Color', 'k', ...
+        'Margin', 1, 'EdgeColor', 'none');
+end
+
+%legend
+legend(ax, 'show', 'Location', 'best', 'FontSize', 16);
+
+grid(ax, 'on');
+hold(ax, 'on');
+
+%---plot ice shelves---
+iceShelves = shaperead("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\IceShelf_Antarctica_v02.shp");
+
+%union all shelf polygons into one big polyshape
+unionShape_Shelves = polyshape();
+for i = 1:length(iceShelves)
+    x = iceShelves(i).X;
+    y = iceShelves(i).Y;
+    try
+        shelfPoly = polyshape(x, y);
+        unionShape_Shelves = union(unionShape_Shelves, shelfPoly);
+    catch ME
+        warning(['Error processing shelf polygon: ', ME.message]);
+    end
+end
+
+%plotting
+plot(ax, unionShape_Shelves, ...
+    'FaceColor','none', ...
+    'EdgeColor','k', ...
+    'LineStyle','--', ...
+    'LineWidth',1, ...
+    'DisplayName','Ice shelves');
+
+%map aspect ratio
+axis(ax,'equal');
+axis(ax,'tight');
+
+hold(ax,'on'); 
+
+%polar grid lines
+theta = linspace(0, 2*pi, 360);
+radii = 500e3 : 500e3 : 3000e3;
+for rVal = radii
+    xCirc = rVal * cos(theta);
+    yCirc = rVal * sin(theta);
+    plot(ax, xCirc, yCirc, 'k:', 'HandleVisibility','off');
+end
+
+%radial lines every 30 degrees
+angles = 0 : 30 : 330;
+rMax = max(radii);
+for aVal = angles
+    xRad = [0, rMax * cosd(aVal)];
+    yRad = [0, rMax * sind(aVal)];
+    plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off');
+end
+
+%500-km scale bar
+scaleLen = 500e3; 
+sx = mesh.xmax - 600e3; 
+sy = mesh.ymin + 100e3; 
+plot(ax, [sx, sx + scaleLen], [sy, sy], 'k-', 'LineWidth', 2, 'HandleVisibility','off');
+text(ax, sx + scaleLen/2, sy - 30e3, '500 km', ...
+    'HorizontalAlignment','center', 'VerticalAlignment','top', ...
+    'FontSize',12, 'Color','k');
+
+hold(ax,'off'); 
+legend(ax,'show');
+
+%function to plot ice thickness difference
+function plot_submesh_data(axHandle, mesh, dataVals, addColorbar)
+    if nargin < 4
+        addColorbar = true; 
+    end
+
+    patch('Parent', axHandle,...
+          'Vertices', mesh.V(1:mesh.nV,:),...
+          'Faces',    mesh.Tri(1:mesh.nTri,:),...
+          'FaceColor','interp',...
+          'FaceVertexCData', dataVals,...
+          'EdgeColor','none',...
+          'HandleVisibility','off');
+
+    %axis limits
+ axis(axHandle, [mesh.xmin mesh.xmax mesh.ymin mesh.ymax]);
+    set(axHandle, 'XTick', [], 'YTick', [], 'FontSize', 14);
+
+    %color scaling
+    caxis(axHandle, [min(dataVals(:)), max(dataVals(:))]);
+
+    %add colorbar
+    if addColorbar
+        cb = colorbar(axHandle, 'Location', 'eastoutside');
+        set(cb, 'FontSize', 14);
+        ylabel(cb, 'Ice thickness difference', 'FontSize', 14);
+    end
+
+    daspect(axHandle, [1 1 1]);
+
+end 

@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %file path
-ncFile = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_d18O_21000\main_output_ANT_00001.nc";
+ncFile = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_realistic_ocean_WOA_realistic_climate\main_output_ANT_00001.nc";
 
 time = ncread(ncFile, 'time');  %[time]
 z_ocean = ncread(ncFile, 'depth');

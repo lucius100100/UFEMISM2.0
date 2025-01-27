@@ -667,6 +667,13 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_climate_snapshot_GRL_config         = ''
     CHARACTER(LEN=256)  :: filename_climate_snapshot_ANT_config         = ''
 
+    ! Choice of matrix climate model
+    CHARACTER(LEN=256)  :: choice_climate_model_matrix_config            = 'linear_time'                  ! Choice of interpolation: "linear_time"
+
+    ! Paths to files containing fields for matrix ocean interpolation
+    CHARACTER(LEN=256)  :: filename_climate_matrix_base2_config           = ''
+    CHARACTER(LEN=256)  :: filename_climate_matrix_base1_config           = ''
+
   ! == Ocean
   ! ========
 
@@ -1671,6 +1678,13 @@ MODULE model_configuration
     CHARACTER(LEN=256)  :: filename_climate_snapshot_GRL
     CHARACTER(LEN=256)  :: filename_climate_snapshot_ANT
 
+    ! Choice of matrix climate model
+    CHARACTER(LEN=256)  :: choice_climate_model_matrix         
+
+    ! Paths to files containing fields for matrix ocean interpolation
+    CHARACTER(LEN=256)  :: filename_climate_matrix_base2
+    CHARACTER(LEN=256)  :: filename_climate_matrix_base1
+
   ! == Ocean
   ! ========
 
@@ -2667,6 +2681,9 @@ CONTAINS
       filename_climate_snapshot_EAS_config                        , &
       filename_climate_snapshot_GRL_config                        , &
       filename_climate_snapshot_ANT_config                        , &
+      choice_climate_model_matrix_config                          , &
+      filename_climate_matrix_base2_config                        , &
+      filename_climate_matrix_base1_config                        , &
       do_asynchronous_ocean_config                                , &
       dt_ocean_config                                             , &
       ocean_vertical_grid_max_depth_config                        , &
@@ -3571,6 +3588,13 @@ CONTAINS
     C%filename_climate_snapshot_EAS                          = filename_climate_snapshot_EAS_config
     C%filename_climate_snapshot_GRL                          = filename_climate_snapshot_GRL_config
     C%filename_climate_snapshot_ANT                          = filename_climate_snapshot_ANT_config
+
+    ! Choice of matrix climate model
+    C%choice_climate_model_matrix                            = choice_climate_model_matrix_config    
+
+    ! Paths to files containing fields for matrix ocean interpolation
+    C%filename_climate_matrix_base2                          = filename_climate_matrix_base2_config
+    C%filename_climate_matrix_base1                          = filename_climate_matrix_base1_config
 
   ! == Ocean
   ! ========
