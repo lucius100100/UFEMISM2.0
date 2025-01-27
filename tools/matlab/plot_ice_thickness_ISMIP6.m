@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_realistic_ocean_PMIP4_realistic_climate\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_realistic_ocean_WOA_realistic_climate\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -269,7 +269,7 @@ radii = 500e3 : 500e3 : 3000e3;
 for rVal = radii
     xCirc = rVal * cos(theta);
     yCirc = rVal * sin(theta);
-    plot(ax, xCirc, yCirc, 'k:', 'HandleVisibility','off');
+    plot(ax, xCirc, yCirc, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
 end
 
 %radial lines every 30 degrees
@@ -278,17 +278,25 @@ rMax = max(radii);
 for aVal = angles
     xRad = [0, rMax * cosd(aVal)];
     yRad = [0, rMax * sind(aVal)];
-    plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off');
+    plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
 end
 
 %500-km scale bar
 scaleLen = 500e3; 
-sx = mesh.xmax - 600e3; 
-sy = mesh.ymin + 100e3; 
-plot(ax, [sx, sx + scaleLen], [sy, sy], 'k-', 'LineWidth', 2, 'HandleVisibility','off');
-text(ax, sx + scaleLen/2, sy - 30e3, '500 km', ...
-    'HorizontalAlignment','center', 'VerticalAlignment','top', ...
-    'FontSize',12, 'Color','k');
+offset_right = 100e3; 
+offset_bottom = 100e3; 
+sx = mesh.xmax - offset_right - scaleLen;  
+sy = mesh.ymin + offset_bottom; 
+
+%plotting
+plot(ax, [sx, sx + scaleLen], [sy, sy], 'k-', 'LineWidth', 4, 'HandleVisibility','off'); 
+
+%text
+text(ax, sx + scaleLen/2, sy + 10e3, '500 km', ... 
+    'HorizontalAlignment','center', ...
+    'VerticalAlignment','bottom', ...  
+    'FontSize',12, ...
+    'Color','k');
 
 hold(ax,'off'); 
 legend(ax,'show');
