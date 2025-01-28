@@ -159,7 +159,7 @@ MODULE ocean_matrix
         w_d18O = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_d18O))
       END IF
 
-      print *, "Interpolation weight calculated = ", w_d18O
+      print *, "Interpolation weight ocean = ", w_d18O
 
       ! Apply interpolation using w_d18O and scaling
       DO vi = mesh%vi1, mesh%vi2
@@ -461,7 +461,7 @@ MODULE ocean_matrix
       ! Calculate weights for linear interpolation
       wt0 = (time - ocean%matrix%t1) / (ocean%matrix%t0 - ocean%matrix%t1)
 
-      print *, "Interpolation weight calculated = ", wt0
+      print *, "Interpolation weight ocean = ", wt0
 
       ! Apply linear interpolation
       DO vi = mesh%vi1, mesh%vi2
@@ -1025,7 +1025,7 @@ MODULE ocean_matrix
       ! Calculate weights for linear interpolation
       wt0 = (time - ocean%matrix%t1) / (ocean%matrix%t0 - ocean%matrix%t1)
 
-      print *, "Interpolation weight calculated =", wt0
+      print *, "Interpolation weight ocean =", wt0
 
       ! Apply linear interpolation
       DO vi = mesh%vi1, mesh%vi2
@@ -1108,7 +1108,7 @@ MODULE ocean_matrix
           w_GHG = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_GHG))
       END IF
 
-      print *, "Interpolation weight calculated = ", w_GHG
+      print *, "Interpolation weight ocean = ", w_GHG
 
       ! Apply interpolation using w_GHG
       DO vi = mesh%vi1, mesh%vi2

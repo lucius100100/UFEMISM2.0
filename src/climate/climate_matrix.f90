@@ -68,7 +68,7 @@ MODULE climate_matrix
       ! Calculate weights for linear interpolation
       wt0 = (time - climate%matrix%t1) / (climate%matrix%t0 - climate%matrix%t1)
 
-      print *, "Interpolation weight calculated =", wt0
+      print *, "Interpolation weight climate =", wt0
 
       ! Apply linear interpolation
       DO vi = mesh%vi1, mesh%vi2
