@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_PI_climate\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_CESM_matrix_climate\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);

@@ -2,39 +2,214 @@ clc;
 clear all;
 close all;
 
-%define filename
+%---load in and prepare file---
 filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_realistic_climate\main_output_ANT_00001.nc";
 
-%read mesh from file
+%mesh
 mesh = read_mesh_from_file(filename);
 
-%read time (time)
-time = ncread(filename, 'time');
-ti = length(time);
+%time
+time = ncread(filename,'time');
+ti   = length(time);
 
-%plot mesh
-%plot_mesh(mesh);
-
-%plot ocean temperature difference
+%---plot ocean T---
 depth_level = 1;
-T_ocean_t1 = ncread(filename, 'T_ocean', [1, depth_level, 1], [Inf, 1, 1]);
+T_ocean_t1 = ncread(filename, 'T_ocean', [1, depth_level, 1],  [Inf, 1, 1]);
 T_ocean_t2 = ncread(filename, 'T_ocean', [1, depth_level, ti], [Inf, 1, 1]);
-T_diff = T_ocean_t2 - T_ocean_t1;
-H = plot_mesh_data(mesh, T_diff);
+T_diff     = T_ocean_t2 - T_ocean_t1;
 
-%colorbar and title
+%plot T_diff
+H = plot_mesh_data(mesh, T_diff);
 set(H.Ax, 'CLim');
-colormap(H.Ax, 'jet'); 
-title(H.Ax, ['Ocean temperature difference (depth=' num2str(depth_level) ')']);
+colormap(H.Ax, 'jet');
+title(H.Ax, ['Ocean temperature difference (depth=', num2str(depth_level), ')']);
 ylabel(H.Cbar, 'Temperature diff (^\circC)');
 
-%plot ocean salinity difference
-depth_level = 1;
-S_ocean_t1 = ncread(filename, 'S_ocean', [1, depth_level, 1], [Inf, 1, 1]);
-S_ocean_t2 = ncread(filename, 'S_ocean', [1, depth_level, ti], [Inf, 1, 1]);
-S_diff = S_ocean_t2 - S_ocean_t1;
-H = plot_mesh_data(mesh, S_diff);
+%---overlay basins and shelves---
+ax = H.Ax;
+hold(ax, 'on');
 
-%title
-title(H.Ax, ['Ocean salinity difference (depth=' num2str(depth_level) ')']);
-ylabel(colorbar(H.Ax), 'Salinity diff (psu)');
+%polar grid lines
+theta = linspace(0, 2*pi, 360);
+radii = 500e3 : 500e3 : 3000e3;
+for rVal = radii
+    xCirc = rVal * cos(theta);
+    yCirc = rVal * sin(theta);
+    plot(ax, xCirc, yCirc, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
+end
+
+%radial lines every 30 degrees
+angles = 0 : 30 : 330;
+rMax   = max(radii);
+for aVal = angles
+    xRad = [0, rMax * cosd(aVal)];
+    yRad = [0, rMax * sind(aVal)];
+    plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
+end
+
+%500-km scale bar
+scaleLen     = 500e3; 
+offset_right = 100e3; 
+offset_bottom= 100e3; 
+sx = mesh.xmax - offset_right - scaleLen;  
+sy = mesh.ymin + offset_bottom; 
+
+%plot the scale bar
+plot(ax, [sx, sx + scaleLen], [sy, sy], 'k-', 'LineWidth', 4, 'HandleVisibility','off'); 
+text(ax, sx + scaleLen/2, sy + 10e3, '500 km', ... 
+    'HorizontalAlignment','center', ...
+    'VerticalAlignment','bottom', ...  
+    'FontSize',12, ...
+    'Color','k');
+
+%execute basins and shelves function
+overlayBasinsAndShelves(ax, ...
+    "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\Basins_Antarctica_v02.shp", ...
+    "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\IceShelf_Antarctica_v02.shp");
+
+hold(ax, 'off');
+
+%---plot ocean S---
+S_ocean_t1 = ncread(filename, 'S_ocean', [1, depth_level, 1],  [Inf, 1, 1]);
+S_ocean_t2 = ncread(filename, 'S_ocean', [1, depth_level, ti], [Inf, 1, 1]);
+S_diff     = S_ocean_t2 - S_ocean_t1;
+
+H = plot_mesh_data(mesh, S_diff);
+title(H.Ax, ['Ocean salinity difference (depth=', num2str(depth_level), ')']);
+ylabel(H.Cbar, 'Salinity diff (psu)');
+
+%---overlay basins and shelves---
+ax = H.Ax;
+hold(ax, 'on');
+
+%polar grid lines
+theta = linspace(0, 2*pi, 360);
+radii = 500e3 : 500e3 : 3000e3;
+for rVal = radii
+    xCirc = rVal * cos(theta);
+    yCirc = rVal * sin(theta);
+    plot(ax, xCirc, yCirc, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
+end
+
+%radial lines every 30 degrees
+angles = 0 : 30 : 330;
+rMax   = max(radii);
+for aVal = angles
+    xRad = [0, rMax * cosd(aVal)];
+    yRad = [0, rMax * sind(aVal)];
+    plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
+end
+
+%500-km scale bar
+scaleLen     = 500e3; 
+offset_right = 100e3; 
+offset_bottom= 100e3; 
+sx = mesh.xmax - offset_right - scaleLen;  
+sy = mesh.ymin + offset_bottom; 
+
+%plot the scale bar
+plot(ax, [sx, sx + scaleLen], [sy, sy], 'k-', 'LineWidth', 4, 'HandleVisibility','off'); 
+text(ax, sx + scaleLen/2, sy + 10e3, '500 km', ... 
+    'HorizontalAlignment','center', ...
+    'VerticalAlignment','bottom', ...  
+    'FontSize',12, ...
+    'Color','k');
+
+%execute basins and shelves function
+overlayBasinsAndShelves(ax, ...
+    "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\Basins_Antarctica_v02.shp", ...
+    "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\IceShelf_Antarctica_v02.shp");
+
+axis(ax, 'equal');
+axis(ax, 'tight');
+hold(ax, 'off');
+
+%function to overlay basins and shelves
+function overlayBasinsAndShelves(ax, basinFile, shelvesFile)
+
+    %basins
+    basinShp = shaperead(basinFile);
+
+    %subregion names
+    subregionNames = {basinShp.Subregions};
+    uniqueSubs     = unique(subregionNames);
+
+    for s = 1:length(uniqueSubs)
+        thisSubregion = uniqueSubs{s};
+        if isempty(thisSubregion)
+            continue; 
+        end
+        
+        idx = strcmp(subregionNames, thisSubregion);
+
+        %union polygon
+        unionPoly = polyshape();
+        isInit    = false;
+        for i = find(idx)
+            x = basinShp(i).X;
+            y = basinShp(i).Y;
+            if ~isempty(x) && ~isempty(y)
+                try
+                    p = polyshape(x, y, 'Simplify', true);
+                    if ~isInit
+                        unionPoly = p;
+                        isInit = true;
+                    else
+                        unionPoly = union(unionPoly, p);
+                    end
+                catch ME
+                    warning("Error building union for '%s': %s", thisSubregion, ME.message);
+                end
+            end
+        end
+        
+        %plotting merged subregion
+        if isInit
+            plot(ax, unionPoly, ...
+                'FaceColor',[0.7, 0.7, 0.7], ...   
+                'EdgeColor','k', ...            
+                'LineWidth',1, ...
+                'FaceAlpha',1.0, ...          
+                'HandleVisibility','off');
+            
+            %label subregions
+            [cx, cy] = centroid(unionPoly);
+            text(ax, cx, cy, thisSubregion, ...
+                'Color','k', 'FontSize',8, 'FontWeight','bold', ...
+                'HorizontalAlignment','center','VerticalAlignment','middle');
+        end
+
+        %plotting basins
+        for i = find(idx)
+            x = basinShp(i).X;
+            y = basinShp(i).Y;
+            plot(ax, x, y, ...
+                'Color',[0.3, 0.3, 0.3], ...  % lighter gray lines
+                'LineWidth',0.5, ...
+                'HandleVisibility','off');
+        end
+    end
+
+    %% 2) ICE SHELVES
+    shelfShp = shaperead(shelvesFile);
+
+    for i = 1:length(shelfShp)
+        x = shelfShp(i).X;
+        y = shelfShp(i).Y;
+        if ~isempty(x) && ~isempty(y)
+            try
+                pShelf = polyshape(x, y, 'Simplify', true);
+                plot(ax, pShelf, ...
+                    'FaceColor',[0.8, 0.8, 1], ...  % or 'none' for no fill
+                    'FaceAlpha',0.3, ...           % translucent
+                    'EdgeColor','k', ...
+                    'LineStyle','--', ...
+                    'LineWidth',1, ...
+                    'DisplayName','Ice shelf');    % or 'HandleVisibility','off'
+            catch ME
+                warning("Error with ice shelf %d: %s", i, ME.message);
+            end
+        end
+    end
+    
+end

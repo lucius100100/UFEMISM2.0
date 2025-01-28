@@ -140,7 +140,7 @@ for s = 1:length(uniqueSubregions)
     %store union shape
     subregionPolygons{s} = unionShape;
     
-    %controid
+    %centroid
     [cx, cy] = centroid(unionShape);
     subregionCentroids(s, :) = [cx, cy];
     
