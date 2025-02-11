@@ -132,10 +132,12 @@ MODULE ocean_matrix
         CALL crash('Unexpected number of columns in prescribed sea level file, expected 2.')
       END IF
 
-      ! Extract data per column
+      ! Extract data per column, reverse order and age data to be positive values
       ALLOCATE(age_data(nRows), sea_level_data(nRows))
-      age_data       = dat(:,1)
-      sea_level_data = dat(:,2)
+      DO i = 1, nRows
+        age_data(i)       = -dat(nRows + 1 - i, 1) 
+        sea_level_data(i) =  dat(nRows + 1 - i, 2)
+      END DO
 
       ! FIX
       ! Hardcoded values for now, should be reading in from csv / txt / dat
@@ -1839,7 +1841,7 @@ MODULE ocean_matrix
 
       ! FIX
       !DO vi = mesh%vi1, mesh%vi2
-        CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_run')
+        !CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_run')
       !END DO
 
       ! Finalise routine path
