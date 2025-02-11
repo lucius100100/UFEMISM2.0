@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %---load in and prepare file---
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_realistic_climate\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\test_ice_shelf\main_output_ANT_00001.nc";
 
 %mesh
 mesh = read_mesh_from_file(filename);
@@ -19,7 +19,7 @@ T_ocean_t2 = ncread(filename, 'T_ocean', [1, depth_level, ti], [Inf, 1, 1]);
 T_diff     = T_ocean_t2 - T_ocean_t1;
 
 %plot T_diff
-H = plot_mesh_data(mesh, T_diff);
+H = plot_mesh_data(mesh, T_ocean_t2);
 set(H.Ax, 'CLim');
 colormap(H.Ax, 'jet');
 title(H.Ax, ['Ocean temperature difference (depth=', num2str(depth_level), ')']);

@@ -928,6 +928,7 @@ MODULE model_configuration
 
     CHARACTER(LEN=256)  :: choice_sealevel_model_config                 = 'fixed'                         !     Can be "fixed", "prescribed", "eustatic", or "SELEN"
     REAL(dp)            :: fixed_sealevel_config                        = 0._dp                           ! [m] Fixed sea level value for the "fixed" choice
+    CHARACTER(LEN=256)  :: filename_sealevel_prescribed_config          = ''                              ! Path to file containing prescribed sea level values
 
   ! == SELEN
   ! ========
@@ -1939,6 +1940,7 @@ MODULE model_configuration
 
     CHARACTER(LEN=256)  :: choice_sealevel_model
     REAL(dp)            :: fixed_sealevel
+    CHARACTER(LEN=256)  :: filename_sealevel_prescribed
 
   ! == SELEN
   ! ========
@@ -2820,6 +2822,7 @@ CONTAINS
       dx_GIA_config                                               , &
       choice_sealevel_model_config                                , &
       fixed_sealevel_config                                       , &
+      filename_sealevel_prescribed_config                         , &  
       SELEN_run_at_t_start_config                                 , &
       SELEN_n_TDOF_iterations_config                              , &
       SELEN_n_recursion_iterations_config                         , &
@@ -3850,6 +3853,7 @@ CONTAINS
 
     C%choice_sealevel_model                                  = choice_sealevel_model_config
     C%fixed_sealevel                                         = fixed_sealevel_config
+    C%filename_sealevel_prescribed                           = filename_sealevel_prescribed_config
 
   ! == SELEN
   ! ========
@@ -4516,19 +4520,21 @@ CONTAINS
     call init_routine( routine_name)
 
     ! Create a text file containing the hash of the current git commit
-    call system( 'git rev-parse HEAD > ' // trim(filename_git_commit_hash), ierr)
-    if (ierr /= 0) call crash('failed to obtain hash of current git commit')
+    !call system( 'git rev-parse HEAD > ' // trim(filename_git_commit_hash), ierr)
+    !if (ierr /= 0) call crash('failed to obtain hash of current git commit')
 
     ! Read the hash from the temporary commit hash file
-    open( unit = git_commit_hash_file_unit, file = filename_git_commit_hash, iostat = ios)
-    if (ios /= 0) call crash('couldnt open temporary commit hash file "' // trim( filename_git_commit_hash) // '"!')
-    read( unit = git_commit_hash_file_unit, fmt = '(A)', iostat = ios) git_commit_hash
-    if (ios < 0) call crash('couldnt read commit hash from the temporary commit hash file')
-    close( unit = git_commit_hash_file_unit)
+    !open( unit = git_commit_hash_file_unit, file = filename_git_commit_hash, iostat = ios)
+    !if (ios /= 0) call crash('couldnt open temporary commit hash file "' // trim( filename_git_commit_hash) // '"!')
+    !read( unit = git_commit_hash_file_unit, fmt = '(A)', iostat = ios) git_commit_hash
+    !if (ios < 0) call crash('couldnt read commit hash from the temporary commit hash file')
+    !close( unit = git_commit_hash_file_unit)
 
     ! Delete the temporary commit hash file
-    call system( 'rm -f ' // trim( filename_git_commit_hash), ierr)
-    if (ierr /= 0) call crash('failed to delete temporary commit hash file')
+    !call system( 'rm -f ' // trim( filename_git_commit_hash), ierr)
+    !if (ierr /= 0) call crash('failed to delete temporary commit hash file')
+
+    git_commit_hash = 'none'
 
     ! Finalise routine path
     call finalise_routine( routine_name)

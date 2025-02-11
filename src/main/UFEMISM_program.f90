@@ -40,6 +40,7 @@ PROGRAM UFEMISM_program
   USE ice_model_utilities                                    , ONLY: MISMIPplus_adapt_flow_factor
   USE unit_tests                                             , ONLY: run_all_unit_tests
   USE component_tests                                        , ONLY: run_all_component_tests
+  USE netcdf_debug                                           , ONLY: save_variable_as_netcdf_dp_2D
 
   IMPLICIT NONE
 
@@ -113,6 +114,8 @@ PROGRAM UFEMISM_program
     IF (C%do_GRL) CALL initialise_model_region( GRL, 'GRL')
     IF (C%do_ANT) CALL initialise_model_region( ANT, 'ANT')
 
+    CALL save_variable_as_netcdf_dp_2D( ANT%ocean%T, 'UFEMISM_program_ocean_T_initialise')
+
     ! == The coupling time loop
     ! =========================
 
@@ -127,6 +130,8 @@ PROGRAM UFEMISM_program
       IF (C%do_EAS) CALL run_model_region( EAS, t_end_models)
       IF (C%do_GRL) CALL run_model_region( GRL, t_end_models)
       IF (C%do_ANT) CALL run_model_region( ANT, t_end_models)
+
+      CALL save_variable_as_netcdf_dp_2D( ANT%ocean%T, 'UFEMISM_program_ocean_T_run')
 
       ! Advance coupling time
       t_coupling = t_end_models

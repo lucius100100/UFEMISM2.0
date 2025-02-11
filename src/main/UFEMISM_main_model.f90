@@ -130,6 +130,8 @@ CONTAINS
       ! Calculate the ocean
       CALL run_ocean_model( region%mesh, region%ice, region%ocean, region%name, region%time, region%grid_smooth)
 
+      CALL save_variable_as_netcdf_dp_2D( region%ocean%T, 'UFEMISM_main_ocean_T_run_A')  
+
       ! Calculate the surface mass balance
       CALL run_SMB_model( region%mesh, region%grid_smooth, region%ice, region%climate, region%SMB, region%name, region%time)
 
@@ -485,6 +487,8 @@ CONTAINS
 
     CALL initialise_ocean_model( region%mesh, region%ocean, region%name)
 
+    CALL save_variable_as_netcdf_dp_2D( region%ocean%T, 'UFEMISM_main_ocean_T_initialise_A')
+
     ! ===== Surface mass balance =====
     ! ================================
 
@@ -514,6 +518,8 @@ CONTAINS
     CALL run_SMB_model( region%mesh, region%grid_smooth, region%ice, region%climate, region%SMB, region%name, C%start_time_of_run)
     CALL run_BMB_model( region%mesh, region%ice, region%ocean, region%refgeo_PD, region%SMB, region%BMB, region%name, C%start_time_of_run)
     CALL run_LMB_model( region%mesh, region%ice, region%LMB, region%name, region%time)
+
+    CALL save_variable_as_netcdf_dp_2D( region%ocean%T, 'UFEMISM_main_ocean_T_initialise_run')
 
     ! Reset the timers
     region%climate%t_next = C%start_time_of_run
@@ -621,6 +627,8 @@ CONTAINS
 
     ! Print to screen
     IF (par%master) WRITE(0,'(A)') ' Finished initialising model region ' // colour_string( TRIM( region%long_name),'light blue')
+
+    CALL save_variable_as_netcdf_dp_2D( region%ocean%T, 'UFEMISM_main_ocean_T_initialise_B')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

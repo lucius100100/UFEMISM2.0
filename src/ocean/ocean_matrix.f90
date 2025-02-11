@@ -10,7 +10,7 @@ MODULE ocean_matrix
   ! ====================
   
     USE precisions                                             , ONLY: dp
-    USE mpi_basic                                              , ONLY: par, sync
+    USE mpi_basic                                              , ONLY: par, sync, ierr
     USE control_resources_and_error_messaging                  , ONLY: crash, init_routine, finalise_routine, colour_string
     USE model_configuration                                    , ONLY: C
     USE parameters
@@ -20,11 +20,13 @@ MODULE ocean_matrix
     USE region_types                                           , ONLY: type_model_region
     USE netcdf_input                                           , ONLY: read_field_from_file_3D_ocean, read_field_from_file_2D
     USE netcdf_basic                                           , ONLY: field_name_options_T_ocean, field_name_options_S_ocean
+    USE netcdf_debug                                           , ONLY: save_variable_as_netcdf_dp_2D
     USE ocean_utilities                                        , ONLY: debug_ocean_matrix_state, initialise_ocean_vertical_grid
     USE mesh_utilities                                         , ONLY: extrapolate_Gaussian
     USE reference_geometry_types                               , ONLY: type_reference_geometry
     USE grid_types                                             , ONLY: type_grid
     USE mesh_data_smoothing                                    , ONLY: smooth_Gaussian_2D
+    USE mpi
 
     IMPLICIT NONE
   
@@ -33,7 +35,71 @@ MODULE ocean_matrix
   ! =========================
   ! ===== Main routines =====
   ! =========================
-  
+
+    SUBROUTINE read_dat_file(filename, colNames, data, nRows, nCols)
+
+      IMPLICIT NONE
+
+      ! In/output variables:
+      CHARACTER(LEN=*),               INTENT(IN)  :: filename
+      CHARACTER(LEN=*), DIMENSION(:), INTENT(IN)  :: colNames
+      REAL(dp), ALLOCATABLE,          INTENT(OUT) :: data(:,:)  
+      INTEGER,                        INTENT(OUT) :: nRows, nCols
+
+      ! Local variables:
+      CHARACTER(LEN=256), PARAMETER               :: routine_name = 'read_dat_file'
+      INTEGER                                     :: unit, ios, i, num_data_rows
+      CHARACTER(LEN=1024)                         :: line
+
+      ! Add routine to path
+      CALL init_routine(routine_name)
+
+      ! Determine the number of data rows (empty lines are skipped).
+      num_data_rows = 0
+      nCols = SIZE(colNames)   
+      unit = 99
+      OPEN(unit, FILE=filename, STATUS='OLD', ACTION='READ', IOSTAT=ios)
+      IF (ios /= 0) THEN
+          PRINT *, "Error opening file: ", TRIM(filename)
+          STOP 1
+      END IF
+
+      DO
+          READ(unit, '(A)', IOSTAT=ios) line
+          IF (ios /= 0) EXIT
+          IF (LEN_TRIM(line) > 0) THEN
+              num_data_rows = num_data_rows + 1
+          END IF
+      END DO
+      CLOSE(unit)
+      nRows = num_data_rows
+
+      ! Allocate the output data array.
+      ALLOCATE(data(nRows, nCols))
+
+      ! Read in the data.
+      unit = 99
+      OPEN(unit, FILE=filename, STATUS='OLD', ACTION='READ', IOSTAT=ios)
+      IF (ios /= 0) THEN
+          PRINT *, "Error reopening file: ", TRIM(filename)
+          STOP 1
+      END IF
+
+      i = 0
+      DO
+          READ(unit, '(A)', IOSTAT=ios) line
+          IF (ios /= 0) EXIT
+          IF (LEN_TRIM(line) == 0) CYCLE
+          i = i + 1
+          READ(line, *) data(i, :)
+      END DO
+      CLOSE(unit)
+
+      ! Finalise routine path
+      CALL finalise_routine(routine_name)
+      
+    END SUBROUTINE read_dat_file
+
     SUBROUTINE get_sea_level_values(time, sea_level_current)
       ! Get sea level values at the given time, limited to 30 ka for now, can be extended to 798 ka.
       ! Spratt, R. M., & Lisiecki, L. E. (2016). A Late Pleistocene sea level stack. Climate of the Past, 12(4), 1079-1092.
@@ -46,33 +112,45 @@ MODULE ocean_matrix
 
       ! Local variables:
       CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'get_sea_level_values'
-      INTEGER, PARAMETER                                    :: num_points = 31
-      REAL(dp), DIMENSION(num_points)                       :: age_data, sea_level_data
-      INTEGER                                               :: i
-      !LOGICAL                                               :: found
-      INTEGER                                               :: idx_low, idx_high
+      REAL(dp), ALLOCATABLE                                 :: dat(:,:)
+      INTEGER                                               :: nRows, nCols
+      REAL(dp), ALLOCATABLE                                 :: age_data(:), sea_level_data(:)
+      INTEGER                                               :: i, idx_low, idx_high
       REAL(dp)                                              :: t_low, t_high, fraction
+      CHARACTER(LEN=32)                                     :: colNames(2)
 
       ! Add routine to path
       CALL init_routine( routine_name)
 
+      ! Column names
+      colNames(1) = 'age_data'
+      colNames(2) = 'sea_level_data'
+
+      ! Read in sea level data
+      CALL read_dat_file(C%filename_sealevel_prescribed, colNames, dat, nRows, nCols)
+      IF (nCols /= 2) THEN
+        CALL crash('Unexpected number of columns in prescribed sea level file, expected 2.')
+      END IF
+
+      ! Extract data per column
+      ALLOCATE(age_data(nRows), sea_level_data(nRows))
+      age_data       = dat(:,1)
+      sea_level_data = dat(:,2)
+
       ! FIX
       ! Hardcoded values for now, should be reading in from csv / txt / dat
       ! https://stackoverflow.com/questions/8828377/reading-data-from-txt-file-in-fortran
-      
-      ! Initialize data arrays
-      age_data = (/ &
-      0._dp, 1000._dp	, 2000._dp, 3000._dp, 4000._dp, 5000._dp, 6000._dp, 7000._dp, 8000._dp, 9000._dp, 10000._dp, &
-      11000._dp, 12000._dp, 13000._dp, 14000._dp, 15000._dp, 16000._dp, 17000._dp, 18000._dp, 19000._dp, 20000._dp, &
-      21000._dp, 22000._dp, 23000._dp, 24000._dp, 25000._dp, 26000._dp, 27000._dp, 28000._dp, 29000._dp, 30000._dp /)
-    
-      sea_level_data = (/ &
-      8.49_dp, 7.63_dp, 4.01_dp, 4.35_dp, 3.13_dp, 0._dp, -4.01_dp, -6.11_dp, -9.09_dp, -15.83_dp, -24.59_dp, -35.85_dp, -51.05_dp, &
-      -66.3_dp, -76.64_dp, -86.57_dp, -98.06_dp, -107.3_dp, -113.01_dp, -116.68_dp, -117.56_dp, -120.01_dp, -125.82_dp, -128.72_dp, &
-      -130.0_dp, -126.89_dp, -122.4_dp, -118.28_dp, -115.19_dp, -110.87_dp, -105.78_dp /)
 
-      ! Initialize found flag
-      !found = .FALSE.
+      ! Initialize data arrays
+      !age_data = (/ &
+      !0._dp, 1000._dp	, 2000._dp, 3000._dp, 4000._dp, 5000._dp, 6000._dp, 7000._dp, 8000._dp, 9000._dp, 10000._dp, &
+      !11000._dp, 12000._dp, 13000._dp, 14000._dp, 15000._dp, 16000._dp, 17000._dp, 18000._dp, 19000._dp, 20000._dp, &
+      !21000._dp, 22000._dp, 23000._dp, 24000._dp, 25000._dp, 26000._dp, 27000._dp, 28000._dp, 29000._dp, 30000._dp /)
+    
+      !sea_level_data = (/ &
+      !8.49_dp, 7.63_dp, 4.01_dp, 4.35_dp, 3.13_dp, 0._dp, -4.01_dp, -6.11_dp, -9.09_dp, -15.83_dp, -24.59_dp, -35.85_dp, -51.05_dp, &
+      !-66.3_dp, -76.64_dp, -86.57_dp, -98.06_dp, -107.3_dp, -113.01_dp, -116.68_dp, -117.56_dp, -120.01_dp, -125.82_dp, -128.72_dp, &
+      !-130.0_dp, -126.89_dp, -122.4_dp, -118.28_dp, -115.19_dp, -110.87_dp, -105.78_dp /)
       
       ! Find the two indices such that age_data(idx_low) <= time <= age_data(idx_high)
       idx_low = -1
@@ -83,14 +161,14 @@ MODULE ocean_matrix
           ! Time is before the first data point
           idx_low = 1
           idx_high = 1
-      ELSE IF (time >= age_data(num_points)) THEN
+      ELSE IF (time >= age_data(nRows)) THEN
           ! Time is after the last data point
-          idx_low = num_points
-          idx_high = num_points
+          idx_low = nRows
+          idx_high = nRows
       ! Main data search
       ELSE
           ! Time is within the data range
-          DO i = 1, num_points - 1
+          DO i = 1, nRows - 1
               IF (age_data(i) <= time .AND. time <= age_data(i+1)) THEN
                   idx_low = i
                   idx_high = i + 1
@@ -146,10 +224,12 @@ MODULE ocean_matrix
 
       ! Get current, LGM, and PI GHG concentrations (time must match entry in age_data)
       CALL get_d18O_values(time, d18O_current)    ! d18O during runtime
-      CALL get_d18O_values(0.0_dp, d18O_PI)     ! PI
+      CALL get_d18O_values(0.0_dp, d18O_PI)       ! PI
       CALL get_d18O_values(21000.0_dp, d18O_LGM)  ! LGM
 
-      print *, "d18O current = ", d18O_current
+      IF (par%master) THEN
+        print *, "d18O current = ", d18O_current
+      END IF
 
       ! Compute weight based on d18O value ratios
       w_d18O = (d18O_current - d18O_LGM) / (d18O_PI - d18O_LGM)
@@ -159,7 +239,9 @@ MODULE ocean_matrix
         w_d18O = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_d18O))
       END IF
 
-      print *, "Interpolation weight ocean = ", w_d18O
+      IF (par%master) THEN
+        print *, "Interpolation weight ocean = ", w_d18O
+      END IF
 
       ! Apply interpolation using w_d18O and scaling
       DO vi = mesh%vi1, mesh%vi2
@@ -461,7 +543,9 @@ MODULE ocean_matrix
       ! Calculate weights for linear interpolation
       wt0 = (time - ocean%matrix%t1) / (ocean%matrix%t0 - ocean%matrix%t1)
 
-      print *, "Interpolation weight ocean = ", wt0
+      IF (par%master) THEN
+        print *, "Interpolation weight ocean = ", wt0
+      END IF
 
       ! Apply linear interpolation
       DO vi = mesh%vi1, mesh%vi2
@@ -1025,7 +1109,9 @@ MODULE ocean_matrix
       ! Calculate weights for linear interpolation
       wt0 = (time - ocean%matrix%t1) / (ocean%matrix%t0 - ocean%matrix%t1)
 
-      print *, "Interpolation weight ocean =", wt0
+      IF (par%master) THEN
+        print *, "Interpolation weight ocean =", wt0
+      END IF
 
       ! Apply linear interpolation
       DO vi = mesh%vi1, mesh%vi2
@@ -1108,7 +1194,9 @@ MODULE ocean_matrix
           w_GHG = MAX(C%clamp_cutoff_low, MIN(C%clamp_cutoff_high, w_GHG))
       END IF
 
-      print *, "Interpolation weight ocean = ", w_GHG
+      IF (par%master) THEN
+        print *, "Interpolation weight ocean = ", w_GHG
+      END IF
 
       ! Apply interpolation using w_GHG
       DO vi = mesh%vi1, mesh%vi2
@@ -1600,7 +1688,7 @@ MODULE ocean_matrix
     
       ! In/output variables:
       TYPE(type_mesh),                        INTENT(IN)    :: mesh
-      TYPE(type_ice_model),                   INTENT(IN)    :: ice
+      TYPE(type_ice_model),                   INTENT(INOUT) :: ice
       TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
       CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
       REAL(dp),                               INTENT(IN)    :: time
@@ -1614,6 +1702,8 @@ MODULE ocean_matrix
       REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: T_field, S_field
       REAL(dp)                                              :: sea_level_current
       TYPE(type_reference_geometry)                         :: refgeo_PD
+      INTEGER                                               :: count_process_3, count_process_2, count_process_1, count_sigma
+      INTEGER                                               :: count_tot_3, count_tot_2, count_tot_1, count_tot_sigma
 
       ! Add routine to path
       CALL init_routine( routine_name) 
@@ -1649,9 +1739,9 @@ MODULE ocean_matrix
         ! Set basic mask (3 = horizontally extrapolated points, 2 = seed points, 1 = extrapolation points, 0 = ignore)
         DO vi = mesh%vi1, mesh%vi2
             IF (ice%mask_icefree_ocean(vi)) THEN
-                mask_ocean(vi) = 2      ! Open ocean: use as seed
+                mask_ocean(vi) = 2                          ! Open ocean: use as seed
             ELSEIF (ice%mask_floating_ice(vi)) THEN
-                mask_ocean(vi) = 1      ! Ice cavity: needs extrapolation
+                mask_ocean(vi) = 1                          ! Ice cavity: needs extrapolation
             END IF
         END DO
         
@@ -1665,11 +1755,21 @@ MODULE ocean_matrix
         sigma = max_ocean_size / 3._dp
         
         ! Print output
+        count_process_3 = COUNT(mask_ocean == 3)
+        count_process_2 = COUNT(mask_ocean == 2)
+        count_process_1 = COUNT(mask_ocean == 1)
+        count_sigma = sigma
+        CALL MPI_REDUCE( count_process_3, count_tot_3, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+        CALL MPI_REDUCE( count_process_2, count_tot_2, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+        CALL MPI_REDUCE( count_process_1, count_tot_1, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+        CALL MPI_REDUCE( count_sigma, count_tot_sigma, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
+
         IF (par%master) THEN
-            WRITE(*,*) 'Ocean extrapolation runtime:'
-            WRITE(*,*) '  - Number of seed points:', COUNT(mask_ocean == 2)
-            WRITE(*,*) '  - Number of cavity points:', COUNT(mask_ocean == 1)
-            WRITE(*,*) '  - Sigma:', sigma
+            WRITE(*,*) 'Ocean extrapolation (Jourdain):'
+            WRITE(*,*) '  - Number of horizontally extrapolated points:', count_tot_3
+            WRITE(*,*) '  - Number of seed points:',                      count_tot_2
+            WRITE(*,*) '  - Number of extrapolation (cavity) points:',    count_tot_1
+            WRITE(*,*) '  - Sigma:', count_tot_sigma
         END IF
         
         ! Step 1: horizontal extrapolation into shelf cavities
@@ -1730,15 +1830,17 @@ MODULE ocean_matrix
 
       END SELECT
 
+      ! Prescribe variable
+      ice%SL = sea_level_current
+
       IF (par%master) THEN
         WRITE(*,*) 'Current sea level:', sea_level_current
       END IF
 
-      ! Increase or decrease water column
-      ! UNSURE this is correct, probably not
-      DO k = 1, C%nz_ocean
-        C%z_ocean(k) = sea_level_current + (k-1)*C%ocean_vertical_grid_dz
-      END DO
+      ! FIX
+      !DO vi = mesh%vi1, mesh%vi2
+        CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_run')
+      !END DO
 
       ! Finalise routine path
       CALL finalise_routine( routine_name)
@@ -1780,25 +1882,25 @@ MODULE ocean_matrix
       ! timeframe0%T
       IF (.NOT. ALLOCATED(ocean%matrix%timeframe0%T)) THEN
         ALLOCATE(ocean%matrix%timeframe0%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-        ocean%matrix%timeframe0%T = 0._dp
+        !ocean%matrix%timeframe0%T = 0._dp
       END IF
     
       ! timeframe0%S
       IF (.NOT. ALLOCATED(ocean%matrix%timeframe0%S)) THEN
           ALLOCATE(ocean%matrix%timeframe0%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-          ocean%matrix%timeframe0%S = 0._dp
+          !ocean%matrix%timeframe0%S = 0._dp
       END IF
       
       ! timeframe1%T
       IF (.NOT. ALLOCATED(ocean%matrix%timeframe1%T)) THEN
           ALLOCATE(ocean%matrix%timeframe1%T(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-          ocean%matrix%timeframe1%T = 0._dp
+          !ocean%matrix%timeframe1%T = 0._dp
       END IF
       
       ! timeframe1%S
       IF (.NOT. ALLOCATED(ocean%matrix%timeframe1%S)) THEN
           ALLOCATE(ocean%matrix%timeframe1%S(mesh%vi1:mesh%vi2, 1:C%nz_ocean))
-          ocean%matrix%timeframe1%S = 0._dp
+          !ocean%matrix%timeframe1%S = 0._dp
       END IF
 
       ! Construct filenames
@@ -1835,10 +1937,13 @@ MODULE ocean_matrix
         ! Read anomaly fields
         CALL read_field_from_file_2D(filename_tas, 'tas', mesh, ocean%matrix%tas) ! Ocean T
         CALL read_field_from_file_2D(filename_sos, 'sos', mesh, ocean%matrix%sos) ! Ocean S 
-        WRITE(*, *) 'Lowest T anomaly:', MINVAL(ocean%matrix%tas)
-        WRITE(*, *) 'Highest T anomaly:', MAXVAL(ocean%matrix%tas)
-        WRITE(*, *) 'Lowest S anomaly:', MINVAL(ocean%matrix%sos)
-        WRITE(*, *) 'Highest S anomaly:', MAXVAL(ocean%matrix%sos)
+
+        IF (par%master) THEN
+          WRITE(*, *) 'Lowest T anomaly:', MINVAL(ocean%matrix%tas)
+          WRITE(*, *) 'Highest T anomaly:', MAXVAL(ocean%matrix%tas)
+          WRITE(*, *) 'Lowest S anomaly:', MINVAL(ocean%matrix%sos)
+          WRITE(*, *) 'Highest S anomaly:', MAXVAL(ocean%matrix%sos)
+        END IF
 
         ! Determine timeframe0 to be PI (LGM + anomaly)
         DO vi = mesh%vi1, mesh%vi2
@@ -1846,11 +1951,13 @@ MODULE ocean_matrix
           ocean%matrix%timeframe0%S(vi,1) = ocean%matrix%timeframe1%S(vi,1) - ocean%matrix%sos(vi)
         END DO
 
-        WRITE(*, *) 'Anomaly field min/max:'
-        PRINT *, "T min/max:", MINVAL(ocean%matrix%tas), MAXVAL(ocean%matrix%tas)
-        DO k = 1, C%nz_ocean
-          PRINT *, "Layer timeframe0", k, "T min/max:", MINVAL(ocean%matrix%timeframe0%T(:,k)), MAXVAL(ocean%matrix%timeframe0%T(:,k))
-        END DO
+        IF (par%master) THEN
+          WRITE(*, *) 'Anomaly field min/max:'
+          PRINT *, "T min/max:", MINVAL(ocean%matrix%tas), MAXVAL(ocean%matrix%tas)
+          DO k = 1, C%nz_ocean
+            PRINT *, "Layer timeframe0", k, "T min/max:", MINVAL(ocean%matrix%timeframe0%T(:,k)), MAXVAL(ocean%matrix%timeframe0%T(:,k))
+          END DO
+        END IF
         
       CASE('insolation', 'insolation+GHG', 'insolation+GHG_radiative')
 
@@ -1893,6 +2000,8 @@ MODULE ocean_matrix
         WRITE(*, *) 'Max S difference:', MAXVAL(ABS(ocean%matrix%timeframe0%S - ocean%matrix%timeframe1%S))
       END IF
 
+      CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_initialise')
+
       ! Finalise routine path
       CALL finalise_routine( routine_name)
     
@@ -1931,10 +2040,12 @@ MODULE ocean_matrix
       CALL read_field_from_file_2D(filename_insolation, 'Q_TOA', mesh, ocean%matrix%Q_TOA_PI, time_to_read_ins_PI)   ! PI  
       CALL read_field_from_file_2D(filename_insolation, 'Q_TOA', mesh, ocean%matrix%Q_TOA_LGM, time_to_read_ins_LGM) ! LGM 
 
-      WRITE(*, *) 'Lowest Q_TOA_PI:', MINVAL(ocean%matrix%Q_TOA_PI)
-      WRITE(*, *) 'Highest Q_TOA_PI:', MAXVAL(ocean%matrix%Q_TOA_PI)
-      WRITE(*, *) 'Lowest Q_TOA_LGM:', MINVAL(ocean%matrix%Q_TOA_LGM)
-      WRITE(*, *) 'Highest Q_TOA_LGM:', MAXVAL(ocean%matrix%Q_TOA_LGM)
+      IF (par%master) THEN
+        WRITE(*, *) 'Lowest Q_TOA_PI:', MINVAL(ocean%matrix%Q_TOA_PI)
+        WRITE(*, *) 'Highest Q_TOA_PI:', MAXVAL(ocean%matrix%Q_TOA_PI)
+        WRITE(*, *) 'Lowest Q_TOA_LGM:', MINVAL(ocean%matrix%Q_TOA_LGM)
+        WRITE(*, *) 'Highest Q_TOA_LGM:', MAXVAL(ocean%matrix%Q_TOA_LGM)
+      END IF
 
       ! Finalize the initialization routine
       CALL finalise_routine(routine_name)

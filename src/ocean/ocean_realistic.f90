@@ -68,6 +68,8 @@ CONTAINS
     ! Local variables:
     CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_ocean_model_realistic'
     CHARACTER(LEN=256)                                    :: filename_ocean_snapshot
+    REAL(dp)                                              :: scale_snapshot_PI_T, scale_snapshot_PI_S
+    INTEGER                                               :: vi, k
 
     ! Add routine to path
     CALL init_routine( routine_name)
@@ -96,6 +98,15 @@ CONTAINS
       ! Fill in  main variables
       CALL read_field_from_file_3D_ocean( filename_ocean_snapshot, field_name_options_T_ocean, mesh, ocean%T)
       CALL read_field_from_file_3D_ocean( filename_ocean_snapshot, field_name_options_S_ocean, mesh, ocean%S)
+
+      ! Print snapshot info
+      IF (par%master) THEN
+        WRITE(*, *) 'Snapshot min/max over depth:' 
+        DO k = 1, C%nz_ocean
+          PRINT *, "Layer ocean%T", k, "T min/max:", MINVAL(ocean%T(:,k)), MAXVAL(ocean%T(:,k))
+          PRINT *, "Layer ocean%S", k, "S min/max:", MINVAL(ocean%S(:,k)), MAXVAL(ocean%S(:,k))
+        END DO 
+      END IF
 
     ELSE
       CALL crash('unknown choice_ocean_model_realistic "' // TRIM( C%choice_ocean_model_realistic) // '"')

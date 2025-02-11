@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_CESM_matrix_climate\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_matrix_climate_prescribed_SL_Jourdain\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -24,6 +24,8 @@ mask_final_ice   = (mask_final   >= 3) & (mask_final   <= 10);
 mask_values = 1:10;
 counts_initial = arrayfun(@(x) sum(mask_initial == x), mask_values);
 counts_final   = arrayfun(@(x) sum(mask_final   == x), mask_values);
+area_initial = arrayfun(@(x) sum(mesh.A(mask_initial == x)), mask_values);
+area_final   = arrayfun(@(x) sum(mesh.A(mask_final   == x)), mask_values);
 
 %compute boundary for initial and final mask
 x_init = mesh.V(mask_initial_ice, 1);
@@ -55,11 +57,11 @@ plot_submesh_data_mask(axMask1, mesh, double(mask_initial));
 title(axMask1, 'Initial mask (PI)', 'FontSize', 20);
 
 %overlay boundary
-hold(axMask1,'on');
-if numel(x_init) > 2
-   plot(axMask1, x_init(K_init), y_init(K_init), 'k-', 'LineWidth', 1);
-end
-hold(axMask1,'off');
+%hold(axMask1,'on');
+%if numel(x_init) > 2
+   %plot(axMask1, x_init(K_init), y_init(K_init), 'k-', 'LineWidth', 1);
+%end
+%hold(axMask1,'off');
 
 %subplot final mask
 axMask2 = axes('Position',[2*margin + subplotWidth, 1 - subplotHeight - margin - tableHeight, subplotWidth, subplotHeight]);
@@ -68,17 +70,17 @@ year = (ti-1) * 1000
 title(axMask2, ['Final mask (time= ' num2str(year) ' year)'], 'FontSize', 20);
 
 %overlay boundary
-hold(axMask2,'on');
-if numel(x_final) > 2
-   plot(axMask2, x_final(K_final), y_final(K_final), 'k-', 'LineWidth', 1);
-end
-hold(axMask2,'off');
+%hold(axMask2,'on');
+%if numel(x_final) > 2
+   %plot(axMask2, x_final(K_final), y_final(K_final), 'k-', 'LineWidth', 1);
+%end
+%hold(axMask2,'off');
 
 % --- Mask counts table ---
 figMaskTables = figure('Position',[200,200,800,400],'Color','w');
 
-combinedData = [mask_values', counts_initial', counts_final'];
-columnNames = {'Mask Value', 'Initial Count', 'Final Count'};
+combinedData = [mask_values', counts_initial', counts_final', area_initial', area_final'];
+columnNames = {'Mask value', 'Initial count', 'Final count', 'Initial area (m^2)', 'Final area (m^2)'};
 rowNames = arrayfun(@mask_label, mask_values, 'UniformOutput', false);
 
 %combined uitable

@@ -39,7 +39,7 @@ CONTAINS
 
     ! In/output variables:
     TYPE(type_mesh),                        INTENT(IN)    :: mesh
-    TYPE(type_ice_model),                   INTENT(IN)    :: ice
+    TYPE(type_ice_model),                   INTENT(INOUT) :: ice
     TYPE(type_ocean_model),                 INTENT(INOUT) :: ocean
     CHARACTER(LEN=3),                       INTENT(IN)    :: region_name
     REAL(dp),                               INTENT(IN)    :: time
@@ -104,6 +104,8 @@ CONTAINS
     ! Compute secondary variables
     CALL calc_ocean_temperature_at_shelf_base(    mesh, ice, ocean)
     CALL calc_ocean_freezing_point_at_shelf_base( mesh, ice, ocean)
+
+    CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_main_T_run')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)
@@ -173,6 +175,8 @@ CONTAINS
     ELSE
       CALL crash('unknown choice_ocean_model "' // TRIM( choice_ocean_model) // '"')
     END IF
+
+    CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_main_T_initialise')
 
     ! Finalise routine path
     CALL finalise_routine( routine_name)

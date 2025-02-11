@@ -47,7 +47,6 @@ MODULE ocean_model_types
     ! Main data fields
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: T                           ! [degrees Celsius] Temperature
     REAL(dp), DIMENSION(:,:  ), ALLOCATABLE :: S                           ! [PSU]             Salinity
-    REAL(dp), DIMENSION(:    ), ALLOCATABLE :: sea_level                   ! Sea level at each mesh vertex
 
     ! Secondary data fields
     REAL(dp), DIMENSION(:    ), ALLOCATABLE :: T_draft                     ! [degrees Celsius] Temperature at ice base

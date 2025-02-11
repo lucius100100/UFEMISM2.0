@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_idealised_ocean_realistic_climate\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_matrix_climate_prescribed_SL_Jourdain\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -71,9 +71,11 @@ basin = shaperead("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Inpu
 %disp('Shapefile Fields:');
 %disp(fieldnames(basin));
 
-%basinTable = struct2table(basin);
-%disp('Basin Table Preview:');
-%disp(head(basinTable));
+basinTable         = struct2table(basin);
+selectedFields     = {'NAME','Regions','Subregions','TYPE','Asso_Shelf'};
+basinTableSelected = basinTable(:, selectedFields);
+disp('Basin Table Preview:');
+disp(basinTableSelected);
 
 %extract field info
 basinName = {basin.NAME};

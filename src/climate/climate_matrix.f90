@@ -41,7 +41,7 @@ MODULE climate_matrix
 
       ! In/output variables:
       TYPE(type_mesh),                        INTENT(IN)    :: mesh
-      TYPE(type_climate_model),                 INTENT(INOUT) :: climate
+      TYPE(type_climate_model),               INTENT(INOUT) :: climate
       REAL(dp),                               INTENT(IN)    :: time
 
       ! Local variables:
@@ -68,7 +68,9 @@ MODULE climate_matrix
       ! Calculate weights for linear interpolation
       wt0 = (time - climate%matrix%t1) / (climate%matrix%t0 - climate%matrix%t1)
 
-      print *, "Interpolation weight climate =", wt0
+      IF (par%master) THEN
+        print *, "Interpolation weight climate =", wt0
+      END IF
 
       ! Apply linear interpolation
       DO vi = mesh%vi1, mesh%vi2
@@ -97,12 +99,6 @@ MODULE climate_matrix
     
       ! Local variables:
       CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'run_climate_model_matrix'
-      INTEGER                                               :: i, j, vi, k
-      INTEGER,  DIMENSION(mesh%vi1:mesh%vi2)                :: mask_climate
-      REAL(dp)                                              :: max_climate_size, sigma
-      REAL(dp), DIMENSION(mesh%vi1:mesh%vi2)                :: T_field, S_field
-      REAL(dp)                                              :: sea_level_current
-      TYPE(type_reference_geometry)                         :: refgeo_PD
 
       ! Add routine to path
       CALL init_routine( routine_name) 
@@ -134,8 +130,6 @@ MODULE climate_matrix
       CHARACTER(LEN=256), PARAMETER                         :: routine_name = 'initialise_climate_model_matrix'
       CHARACTER(LEN=256)                                    :: filename1, filename2, filename_insolation, filename_tas, filename_sos
       INTEGER                                               :: i, j, vi, m
-      INTEGER,  DIMENSION(mesh%vi1:mesh%vi2)                :: mask_climate
-      REAL(dp)                                              :: max_climate_size, sigma
 
       ! Add routine to path
       CALL init_routine( routine_name)

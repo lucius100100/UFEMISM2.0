@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_realistic_ocean_WOA_realistic_climate\main_output_ANT_00001.nc";
+filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_realistic_climate_PMIP3_LGM_no_BMB\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -52,7 +52,7 @@ mask_values = 1:10;
 counts_initial = arrayfun(@(x) sum(mask_initial == x), mask_values);
 counts_final   = arrayfun(@(x) sum(mask_final   == x), mask_values);
 
-% --- Ice thickness ---
+%---ice thickness---
 
 %ice thickness difference, overlain with initial and final margins
 f = figure('Position',[100,100,1400,900],'Color','w');
@@ -63,18 +63,19 @@ hold(ax, 'on');
 plot_submesh_data(ax, mesh, Hi_diff, true);
 title(ax, 'Ice thickness difference between LGM and PI', 'FontSize', 22);
 
-%---basin shapefile---
+%---ISMIP6 overlay---
+%shapefile basin
 basin = shaperead("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\Basins_Antarctica_v02.shp");
 
 %basin info
 %disp('Shapefile Fields:');
 %disp(fieldnames(basin));
 
-basinTable = struct2table(basin);
-%disp('Basin Table Preview:');
-%disp(head(basinTable));
+basinTable = struct2table(basin.name, basin.Regions, basin.Subregions, basin.TYPE, basin.);
+disp('Basin Table Preview:');
+disp(basinTable);
 
-%print every field info
+%extract field info
 basinName = {basin.NAME};
 basinRegions = {basin.Regions};
 basinSubregions = {basin.Subregions};
@@ -87,6 +88,7 @@ uniqueSubregions = unique(basinSubregions);
 uniqueTypes = unique(basinType);
 uniqueAsso_shelf = unique(basinAsso_shelf);
 
+%print shapefile info
 %disp('Name:');
 %disp(uniqueNames);
 %disp('Unique Regions:');
@@ -102,18 +104,17 @@ uniqueAsso_shelf = unique(basinAsso_shelf);
 %uniqueSubregions = uniqueSubregions(~cellfun(@isempty, uniqueSubregions));
 %disp(['Number of unique subregions (excluding empty): ', num2str(length(uniqueSubregions))]);
 
-% Extract subregions
-basinSubregions = {basin.Subregions};
+%---basins and islands---
 
-% Initialize a cell array to store union polyshapes
+%initialize array
 subregionPolygons = cell(length(uniqueSubregions), 1);
-subregionCentroids = zeros(length(uniqueSubregions), 2); % To store centroids
+subregionCentroids = zeros(length(uniqueSubregions), 2); 
 
 plottedIslands = false;
 plottedGrounded = false;
 plottedShelves = false;
 
-% Loop through each unique subregion to create union polygons and plot outlines
+%loop through subregions
 for s = 1:length(uniqueSubregions)
     currentSubregion = uniqueSubregions{s};
     
@@ -139,7 +140,7 @@ for s = 1:length(uniqueSubregions)
     %store union shape
     subregionPolygons{s} = unionShape;
     
-    %controid
+    %centroid
     [cx, cy] = centroid(unionShape);
     subregionCentroids(s, :) = [cx, cy];
     
@@ -232,7 +233,7 @@ legend(ax, 'show', 'Location', 'best', 'FontSize', 16);
 grid(ax, 'on');
 hold(ax, 'on');
 
-%--- plot ice shelves ---
+%---plot ice shelves---
 iceShelves = shaperead("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\IceShelf_Antarctica_v02.shp");
 
 %union all shelf polygons into one big polyshape
@@ -259,6 +260,43 @@ plot(ax, unionShape_Shelves, ...
 %map aspect ratio
 axis(ax,'equal');
 axis(ax,'tight');
+
+hold(ax,'on'); 
+
+%polar grid lines
+theta = linspace(0, 2*pi, 360);
+radii = 500e3 : 500e3 : 3000e3;
+for rVal = radii
+    xCirc = rVal * cos(theta);
+    yCirc = rVal * sin(theta);
+    plot(ax, xCirc, yCirc, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
+end
+
+%radial lines every 30 degrees
+angles = 0 : 30 : 330;
+rMax = max(radii);
+for aVal = angles
+    xRad = [0, rMax * cosd(aVal)];
+    yRad = [0, rMax * sind(aVal)];
+    plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
+end
+
+%500-km scale bar
+scaleLen = 500e3; 
+offset_right = 100e3; 
+offset_bottom = 100e3; 
+sx = mesh.xmax - offset_right - scaleLen;  
+sy = mesh.ymin + offset_bottom; 
+
+%plotting
+plot(ax, [sx, sx + scaleLen], [sy, sy], 'k-', 'LineWidth', 4, 'HandleVisibility','off'); 
+
+%text
+text(ax, sx + scaleLen/2, sy + 10e3, '500 km', ... 
+    'HorizontalAlignment','center', ...
+    'VerticalAlignment','bottom', ...  
+    'FontSize',12, ...
+    'Color','k');
 
 hold(ax,'off'); 
 legend(ax,'show');
