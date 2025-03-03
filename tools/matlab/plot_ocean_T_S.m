@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %---load in and prepare file---
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\test_ice_shelf\main_output_ANT_00001.nc";
+filename = 'E:\Master\Guided_research\Results_low_resolution\Results_realistic_climate_RACMO_matrix_ocean\main_output_ANT_00001.nc';
 
 %mesh
 mesh = read_mesh_from_file(filename);
@@ -22,8 +22,23 @@ T_diff     = T_ocean_t2 - T_ocean_t1;
 H = plot_mesh_data(mesh, T_ocean_t2);
 set(H.Ax, 'CLim');
 colormap(H.Ax, 'jet');
-title(H.Ax, ['Ocean temperature difference (depth=', num2str(depth_level), ')']);
-ylabel(H.Cbar, 'Temperature diff (^\circC)');
+title(H.Ax, ['Ocean temperature difference']);
+%title(H.Ax, ['Ocean temperature difference (depth=', num2str(depth_level), ')']);
+ylabel(H.Cbar, 'Temperature (^\circ C)');
+
+%position colorbar labels
+H.Cbar.Label.Units = 'normalized';
+posLabel = H.Cbar.Label.Position;
+posLabel(1) = posLabel(1) - 1;
+H.Cbar.Label.Position = posLabel;
+
+%position colorbar
+pos = get(H.Cbar, 'Position');
+pos(1) = pos(1) - 0.005;
+set(H.Cbar, 'Position', pos);
+
+H.Cbar.FontSize = 12;
+H.Cbar.Label.FontSize = 12;
 
 %---overlay basins and shelves---
 ax = H.Ax;
@@ -45,6 +60,19 @@ for aVal = angles
     xRad = [0, rMax * cosd(aVal)];
     yRad = [0, rMax * sind(aVal)];
     plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
+end
+
+%polar coordinate labels
+labelOffset = 100e3;
+
+%labels at each 30° interval
+for aVal = angles
+    xLabel = (rMax - labelOffset) * cosd(aVal);
+    yLabel = (rMax - labelOffset) * sind(aVal);
+    text(ax, xLabel, yLabel, sprintf('%d°', mod(90 - aVal, 360)), ...
+         'HorizontalAlignment', 'center', ...
+         'VerticalAlignment', 'middle', ...
+         'FontSize', 10, 'Color', 'k');
 end
 
 %500-km scale bar
@@ -75,8 +103,23 @@ S_ocean_t2 = ncread(filename, 'S_ocean', [1, depth_level, ti], [Inf, 1, 1]);
 S_diff     = S_ocean_t2 - S_ocean_t1;
 
 H = plot_mesh_data(mesh, S_diff);
-title(H.Ax, ['Ocean salinity difference (depth=', num2str(depth_level), ')']);
-ylabel(H.Cbar, 'Salinity diff (psu)');
+title(H.Ax, ['Ocean salinity difference']);
+%title(H.Ax, ['Ocean salinity difference (depth=', num2str(depth_level), ')']);
+ylabel(H.Cbar, 'Salinity (psu)');
+
+%position colorbar labels
+H.Cbar.Label.Units = 'normalized';
+posLabel = H.Cbar.Label.Position;
+posLabel(1) = posLabel(1) - 1;
+H.Cbar.Label.Position = posLabel;
+
+%position colorbar
+pos = get(H.Cbar, 'Position');
+pos(1) = pos(1) - 0.005;
+set(H.Cbar, 'Position', pos);
+
+H.Cbar.FontSize = 12;
+H.Cbar.Label.FontSize = 12;
 
 %---overlay basins and shelves---
 ax = H.Ax;
@@ -100,6 +143,19 @@ for aVal = angles
     plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
 end
 
+%polar coordinate labels
+labelOffset = 100e3;
+
+%labels at each 30° interval
+for aVal = angles
+    xLabel = (rMax - labelOffset) * cosd(aVal);
+    yLabel = (rMax - labelOffset) * sind(aVal);
+    text(ax, xLabel, yLabel, sprintf('%d°', mod(90 - aVal, 360)), ...
+         'HorizontalAlignment', 'center', ...
+         'VerticalAlignment', 'middle', ...
+         'FontSize', 10, 'Color', 'k');
+end
+
 %500-km scale bar
 scaleLen     = 500e3; 
 offset_right = 100e3; 
@@ -120,96 +176,4 @@ overlayBasinsAndShelves(ax, ...
     "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\Basins_Antarctica_v02.shp", ...
     "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\IceShelf_Antarctica_v02.shp");
 
-axis(ax, 'equal');
-axis(ax, 'tight');
 hold(ax, 'off');
-
-%function to overlay basins and shelves
-function overlayBasinsAndShelves(ax, basinFile, shelvesFile)
-
-    %basins
-    basinShp = shaperead(basinFile);
-
-    %subregion names
-    subregionNames = {basinShp.Subregions};
-    uniqueSubs     = unique(subregionNames);
-
-    for s = 1:length(uniqueSubs)
-        thisSubregion = uniqueSubs{s};
-        if isempty(thisSubregion)
-            continue; 
-        end
-        
-        idx = strcmp(subregionNames, thisSubregion);
-
-        %union polygon
-        unionPoly = polyshape();
-        isInit    = false;
-        for i = find(idx)
-            x = basinShp(i).X;
-            y = basinShp(i).Y;
-            if ~isempty(x) && ~isempty(y)
-                try
-                    p = polyshape(x, y, 'Simplify', true);
-                    if ~isInit
-                        unionPoly = p;
-                        isInit = true;
-                    else
-                        unionPoly = union(unionPoly, p);
-                    end
-                catch ME
-                    warning("Error building union for '%s': %s", thisSubregion, ME.message);
-                end
-            end
-        end
-        
-        %plotting merged subregion
-        if isInit
-            plot(ax, unionPoly, ...
-                'FaceColor',[0.7, 0.7, 0.7], ...   
-                'EdgeColor','k', ...            
-                'LineWidth',1, ...
-                'FaceAlpha',1.0, ...          
-                'HandleVisibility','off');
-            
-            %label subregions
-            [cx, cy] = centroid(unionPoly);
-            text(ax, cx, cy, thisSubregion, ...
-                'Color','k', 'FontSize',8, 'FontWeight','bold', ...
-                'HorizontalAlignment','center','VerticalAlignment','middle');
-        end
-
-        %plotting basins
-        for i = find(idx)
-            x = basinShp(i).X;
-            y = basinShp(i).Y;
-            plot(ax, x, y, ...
-                'Color',[0.3, 0.3, 0.3], ... 
-                'LineWidth',0.5, ...
-                'HandleVisibility','off');
-        end
-    end
-
-    %shelves
-    shelfShp = shaperead(shelvesFile);
-
-    for i = 1:length(shelfShp)
-        x = shelfShp(i).X;
-        y = shelfShp(i).Y;
-        if ~isempty(x) && ~isempty(y)
-            try
-                pShelf = polyshape(x, y, 'Simplify', true);
-                plot(ax, pShelf, ...
-                    'FaceColor',[0.8, 0.8, 1], ... 
-                    'FaceAlpha',0.3, ...           
-                    'EdgeColor','k', ...
-                    'LineStyle','--', ...
-                    'LineWidth',1, ...
-                    'DisplayName','Ice shelf');    
-            catch ME
-                warning("Error with ice shelf %d: %s", i, ME.message);
-            end
-        end
-    end
-    
-end

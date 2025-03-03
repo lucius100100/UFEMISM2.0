@@ -1757,18 +1757,15 @@ MODULE ocean_matrix
         sigma = max_ocean_size / 3._dp
         
         ! Print output
-        count_process_3 = COUNT(mask_ocean == 3)
         count_process_2 = COUNT(mask_ocean == 2)
         count_process_1 = COUNT(mask_ocean == 1)
         count_sigma = sigma
-        CALL MPI_REDUCE( count_process_3, count_tot_3, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
         CALL MPI_REDUCE( count_process_2, count_tot_2, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
         CALL MPI_REDUCE( count_process_1, count_tot_1, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
         CALL MPI_REDUCE( count_sigma, count_tot_sigma, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD, ierr)
 
         IF (par%master) THEN
             WRITE(*,*) 'Ocean extrapolation (Jourdain):'
-            WRITE(*,*) '  - Number of horizontally extrapolated points:', count_tot_3
             WRITE(*,*) '  - Number of seed points:',                      count_tot_2
             WRITE(*,*) '  - Number of extrapolation (cavity) points:',    count_tot_1
             WRITE(*,*) '  - Sigma:', count_tot_sigma
@@ -1839,10 +1836,7 @@ MODULE ocean_matrix
         WRITE(*,*) 'Current sea level:', sea_level_current
       END IF
 
-      ! FIX
-      !DO vi = mesh%vi1, mesh%vi2
-        !CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_run')
-      !END DO
+      CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_run')
 
       ! Finalise routine path
       CALL finalise_routine( routine_name)
@@ -1923,6 +1917,9 @@ MODULE ocean_matrix
       CALL read_field_from_file_3D_ocean(filename2, 't_an', mesh, ocean%matrix%timeframe1%T) ! Ocean T LGM
       CALL read_field_from_file_3D_ocean(filename2, 's_an', mesh, ocean%matrix%timeframe1%S) ! Ocean S LGM
 
+      !CALL save_variable_as_netcdf_dp_2D( ocean%matrix%timeframe0%T, 'ocean_matrix_T_initialise_0')
+      !CALL save_variable_as_netcdf_dp_2D( ocean%matrix%timeframe1%T, 'ocean_matrix_T_initialise_1')
+
       ! Ensure correct model choice and load in files if necessary
       SELECT CASE (TRIM(C%choice_ocean_model_matrix))
       CASE('linear_time', 'GHG_radiative', 'GHG', 'd18O')
@@ -1969,13 +1966,24 @@ MODULE ocean_matrix
         CALL crash('Unknown choice_ocean_model_matrix' // TRIM(C%choice_ocean_model_matrix))
       END SELECT
 
+      ! Options to scale snapshot PI
+      DO vi = mesh%vi1, mesh%vi2
+        DO k = 1, C%nz_ocean
+          ocean%matrix%timeframe0%T(vi,k) = MAX(-3.0_dp, ocean%matrix%timeframe0%T(vi,k) + scale_snapshot_PI_T)
+          ocean%matrix%timeframe0%S(vi,k) = ocean%matrix%timeframe0%S(vi,k) + scale_snapshot_PI_S
+        END DO
+      END DO
+      
       ! Prescribe initial ocean state (start from PI snapshot)
       DO vi = mesh%vi1, mesh%vi2
         DO k = 1, C%nz_ocean
-          ocean%T(vi,k) = MAX(-3.0_dp, ocean%matrix%timeframe0%T(vi,k) + scale_snapshot_PI_T)
-          ocean%S(vi,k) = ocean%matrix%timeframe0%S(vi,k) + scale_snapshot_PI_S
+          ocean%T(vi,k) = ocean%matrix%timeframe0%T(vi,k)
+          ocean%S(vi,k) = ocean%matrix%timeframe0%S(vi,k)
         END DO
       END DO
+
+      !CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_T')
+      !call crash('test')
 
       ! Options to scale snapshot LGM
       DO vi = mesh%vi1, mesh%vi2
@@ -2002,7 +2010,7 @@ MODULE ocean_matrix
         WRITE(*, *) 'Max S difference:', MAXVAL(ABS(ocean%matrix%timeframe0%S - ocean%matrix%timeframe1%S))
       END IF
 
-      CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_initialise')
+      !CALL save_variable_as_netcdf_dp_2D( ocean%T, 'ocean_matrix_T_initialise_final')
 
       ! Finalise routine path
       CALL finalise_routine( routine_name)

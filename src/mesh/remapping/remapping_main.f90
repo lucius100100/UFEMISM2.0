@@ -768,7 +768,7 @@ contains
     ! Initialise
     NaN = -0.1234_dp
 
-    ! allocate mask for valid points in a data column
+    ! Allocate mask for valid points in a data column
     allocate( z_mask_old( size( vert_src)))
     allocate( z_mask_new( size( vert_dst)))
 
@@ -824,7 +824,7 @@ contains
 
     end do
 
-    ! allocate mask for extrapolation
+    ! Allocate mask for extrapolation
     allocate( mask_fill( mesh%vi1:mesh%vi2))
 
     ! Extrapolate into NaN areas independently for each layer

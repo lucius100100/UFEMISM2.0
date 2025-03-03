@@ -552,6 +552,12 @@ CONTAINS
       ! Read gridded data
       CALL read_field_from_lonlat_file_3D_ocean( filename, field_name_options, d_grid_lonlat_vec_partial_from_file, time_to_read = time_to_read)
 
+      !If (par%master) then
+        !call warning('biep'// TRIM( filename))
+      !end if
+
+      !CALL save_variable_as_netcdf_dp_2D( d_grid_lonlat_vec_partial_from_file, 'd1')
+
       ! Allocate memory for meshed data using all data layers
       ALLOCATE( d_partial_raw_layers( mesh%vi1:mesh%vi2, ndepth_loc))
 
@@ -560,6 +566,13 @@ CONTAINS
 
       ! Remap data vertically
       CALL map_from_vertical_to_vertical_2D_ocean( mesh, depth_loc, C%z_ocean, d_partial_raw_layers, d_partial)
+
+      !If (par%master) then
+        !call warning('biep 2'// TRIM( filename))
+      !end if
+
+      !CALL save_variable_as_netcdf_dp_2D( d_partial_raw_layers, 'd2')
+      !call crash('stop')
 
       ! Clean up after yourself
       CALL deallocate_lonlat_grid( grid_lonlat_from_file)

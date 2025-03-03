@@ -3,7 +3,7 @@ clear all;
 close all;
 
 %filename
-filename = "C:\Users\luciu\Documents\Guided research\UFEMISM2.0\results_test_matrix_ocean_matrix_climate_prescribed_SL_Jourdain\main_output_ANT_00001.nc";
+filename = "E:\Master\Guided_research\Results_low_resolution\Results_realistic_climate_PMIP3_LGM_matrix_ocean\main_output_ANT_00001.nc";
 
 %read mesh from file
 mesh = read_mesh_from_file(filename);
@@ -63,6 +63,116 @@ hold(ax, 'on');
 plot_submesh_data(ax, mesh, Hi_diff, true);
 title(ax, 'Ice thickness difference between LGM and PI', 'FontSize', 22);
 
+%---ice margin LGM---
+vertices = mesh.V(1:mesh.nV,:);
+faces = mesh.Tri(1:mesh.nTri,:);
+iceMask = mask_final_ice;
+iceTriangles = faces(all(iceMask(faces),2),:);
+
+if ~isempty(iceTriangles)
+    TR = triangulation(double(iceTriangles), vertices);
+    [B,P] = freeBoundary(TR);
+    
+    if ~isempty(B)
+        allEdges = [B; B(:,[2 1])];
+        G = graph(B(:,1), B(:,2));
+        cc = conncomp(G);
+        numComponents = max(cc);
+        firstLabel = true;
+        for ci = 1:numComponents
+            compNodes = find(cc == ci);
+            
+            %skip small icefree vertex clusters
+            if length(compNodes) < 5
+                continue;
+            end
+
+            compEdges = [];
+            for i = compNodes
+                edgeIndices = find(allEdges(:,1) == i);
+                for j = edgeIndices'
+                    if ismember(allEdges(j,2), compNodes)
+                        compEdges = [compEdges; allEdges(j,:)];
+                    end
+                end
+            end
+            compEdges = unique(compEdges, 'rows');
+            
+            pathVertices = [];
+            
+            endpoints = compEdges(:);
+            endpointCounts = histcounts(endpoints, 0.5:max(endpoints)+0.5);
+            startPoint = find(endpointCounts == 1, 1);
+            
+            if isempty(startPoint)
+                startPoint = compEdges(1,1);
+            end
+
+            currentPoint = startPoint;
+            pathVertices = currentPoint;
+            
+            while true
+                nextEdges = compEdges(compEdges(:,1) == currentPoint, :);
+                
+                if isempty(nextEdges)
+                    nextEdges = compEdges(compEdges(:,2) == currentPoint, :);
+                    
+                    if isempty(nextEdges)
+                        break;
+                    end
+                    
+                    nextPoint = nextEdges(1,1);
+                else
+                    nextPoint = nextEdges(1,2);
+                end
+                
+                compEdges(all(compEdges == [currentPoint, nextPoint], 2) | ...
+                          all(compEdges == [nextPoint, currentPoint], 2), :) = [];
+                
+                pathVertices = [pathVertices; nextPoint];
+                
+                currentPoint = nextPoint;
+                
+                if (isempty(compEdges) || length(pathVertices) > 1 && pathVertices(end) == pathVertices(1))
+                    break;
+                end
+            end
+            
+            coords = P(pathVertices, :);
+            
+            x = coords(:,1);
+            y = coords(:,2);
+            area = 0.5*abs(sum(x.*circshift(y,[1,0]) - circshift(x,[1,0]).*y));
+
+            lineColor = 'r'; 
+            lineWidth = 1;   
+            
+            if area < max([1000, area*0.1])
+                lineColor = 'b'; 
+                lineWidth = 0.75;
+            end
+            
+            if firstLabel
+                displayName = 'Ice Extent Margin';
+                firstLabel = false;
+                visibility = 'off';
+            else
+                displayName = '';
+                visibility = 'off';
+            end
+            
+            %plotting
+            plot(ax, coords(:,1), coords(:,2), [lineColor '-'], 'LineWidth', lineWidth, ...
+                'DisplayName', displayName, 'HandleVisibility', visibility, 'Tag', 'IceMargin');
+        end
+    end
+end
+
+%legend entry
+if ~any(strcmp(get(findobj(ax, 'Type', 'line'), 'Tag'), 'IceMarginDummy'))
+    plot(ax, nan, nan, 'r-', 'LineWidth', 1, 'DisplayName', 'Ice margin LGM', 'Tag', 'IceMarginDummy');
+end
+
 %---ISMIP6 overlay---
 %shapefile basin
 basin = shaperead("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Input\Basins\Basins_Antarctica_v02.shp");
@@ -74,8 +184,8 @@ basin = shaperead("C:\Users\luciu\Documents\Guided research\UFEMISM2.0\Data\Inpu
 basinTable         = struct2table(basin);
 selectedFields     = {'NAME','Regions','Subregions','TYPE','Asso_Shelf'};
 basinTableSelected = basinTable(:, selectedFields);
-disp('Basin Table Preview:');
-disp(basinTableSelected);
+%disp('Basin Table Preview:');
+%disp(basinTableSelected);
 
 %extract field info
 basinName = {basin.NAME};
@@ -283,6 +393,19 @@ for aVal = angles
     plot(ax, xRad, yRad, 'k:', 'HandleVisibility','off', 'Color', [0.5, 0.5, 0.5]);
 end
 
+%polar coordinate labels
+labelOffset = 100e3;
+
+%labels at each 30° interval
+for aVal = angles
+    xLabel = (rMax - labelOffset) * cosd(aVal);
+    yLabel = (rMax - labelOffset) * sind(aVal);
+    text(ax, xLabel, yLabel, sprintf('%d°', mod(90 - aVal, 360)), ...
+         'HorizontalAlignment', 'center', ...
+         'VerticalAlignment', 'middle', ...
+         'FontSize', 10, 'Color', 'k');
+end
+
 %500-km scale bar
 scaleLen = 500e3; 
 offset_right = 100e3; 
@@ -300,6 +423,7 @@ text(ax, sx + scaleLen/2, sy + 10e3, '500 km', ...
     'FontSize',12, ...
     'Color','k');
 
+axis(ax, 'tight');
 hold(ax,'off'); 
 legend(ax,'show');
 
@@ -322,13 +446,13 @@ function plot_submesh_data(axHandle, mesh, dataVals, addColorbar)
     set(axHandle, 'XTick', [], 'YTick', [], 'FontSize', 14);
 
     %color scaling
-    caxis(axHandle, [min(dataVals(:)), max(dataVals(:))]);
+    caxis(axHandle, [-2500, 5000]);
 
     %add colorbar
     if addColorbar
         cb = colorbar(axHandle, 'Location', 'eastoutside');
         set(cb, 'FontSize', 14);
-        ylabel(cb, 'Ice thickness difference', 'FontSize', 14);
+        ylabel(cb, 'Ice thickness (m)', 'FontSize', 14);
     end
 
     daspect(axHandle, [1 1 1]);
